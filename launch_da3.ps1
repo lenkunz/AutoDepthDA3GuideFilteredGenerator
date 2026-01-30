@@ -90,8 +90,10 @@ try {
 
   # 2. Check for capacity (Venv & Yanking)
   Write-Host "[*] Verifying environment compatibility..."
-  $hasVenvMod = (& $basePython -c "import venv; print('OK')" 2>$null; $LASTEXITCODE -eq 0)
-  $hasTorch = (& $basePython -c "import torch; print('OK')" 2>$null; $LASTEXITCODE -eq 0)
+  $null = & $basePython -c "import venv; print('OK')" 2>$null
+  $hasVenvMod = ($LASTEXITCODE -eq 0)
+  $null = & $basePython -c "import torch; print('OK')" 2>$null
+  $hasTorch = ($LASTEXITCODE -eq 0)
 
   $venvPath = Join-Path $PSScriptRoot "env"
   $pythonExe = Join-Path $venvPath "Scripts\python.exe"
