@@ -1,8 +1,10 @@
 # About Global Depth V3 Service
 
-This service enables **Depth Anything V3** (the latest state-of-the-art AI) for your image viewing experience, providing a massive visual upgrade over the native game models.
+This service enables **Depth Anything V3** (the latest state-of-the-art AI) for your image viewing experience. 
 
-## Why use Depth Anything V3?
+> [!NOTE]
+> **Why call it "midas3"?**
+> While the engine is powered by **Depth Anything V3**, the folder and launcher use the name `midas3` for 100% compatibility with the game's internal code. Think of it as the "Midas" interface running a "DA3" engine.
 The original game models often struggle with complex scenes—creating blurry edges or "jelly-like" distortions in 3D. This implementation replaces that engine with V3 technology to achieve:
 
 - **Ultra-Sharp Details**: Fine edges like hair, foliage, and intricate objects are captured with surgical precision.
