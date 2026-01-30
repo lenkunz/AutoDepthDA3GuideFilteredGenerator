@@ -25,8 +25,8 @@ function Get-HardwareStatus {
       # Fallback: Check if an NVIDIA GPU exists at all via CIM
       $gpu = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -like "*NVIDIA*" }
       if ($gpu) {
-        $vram = "Detected ($($gpu.Name))"
-        $cuda = "Found (NVIDIA-SMI Missing from PATH)"
+        $vram = "$($gpu.Name) (SMI missing)"
+        $cuda = "Found (Manual/SMI required for live VRAM in this window)"
       }
     }
   }
@@ -161,15 +161,18 @@ try {
   # 0. Hardware Analysis
   $hw = Get-HardwareStatus
   
-  Write-Host "[*] HARDWARE ANALYSIS" -ForegroundColor Cyan
-  Write-Host "  > VRAM: $($hw.vram)"
-  Write-Host "  > CUDA: $($hw.cuda)"
+  Write-Host "[*] HARDWARE ANALYSIS (Real-time)" -ForegroundColor Cyan
+  Write-Host "  > Current Available VRAM: $($hw.vram)"
+  Write-Host "  > CUDA Status:            $($hw.cuda)"
+  Write-Host "  > Note: This represents VRAM left while your game/apps are running." -ForegroundColor Gray
   
   if ($hw.cuda -eq "Not Found") {
     Write-Host "`n[!] WARNING: NO CUDA DETECTED" -ForegroundColor Red
     Write-Host "[!] This service will run on CPU, which is EXTREMELY slow." -ForegroundColor Red
     Write-Host "[!] Depth will take 30s+ per image. NVIDIA GPU recommended.`n" -ForegroundColor Red
   }
+
+  Write-Host "[*] Note: A 3-pass hardware benchmark will run after selection." -ForegroundColor Gray
 
   while ($SelectionLoop) {
 
@@ -215,7 +218,7 @@ try {
     
       # Verify if CUDA is actually usable by the AI
       $null = & $basePython -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>$null
-      if ($LASTEXITCODE -ne 0 -and $cuda -ne "Not Found") {
+      if ($LASTEXITCODE -ne 0 -and $hw.cuda -ne "Not Found") {
         Write-Host "`n[!] WARNING: NVIDIA GPU found, but your Python libraries are CPU-ONLY." -ForegroundColor Yellow
         Write-Host "[!] Deep learning performance will be severely limited.`n" -ForegroundColor Yellow
       }

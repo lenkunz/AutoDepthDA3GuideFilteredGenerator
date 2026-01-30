@@ -2,23 +2,18 @@
 
 This service provides a depth estimation pipeline optimized for high visual fidelity and VRAM efficiency in VR.
 
-## Technical Overview
-The accelerator utilizes a **Guided Filter** to balance detail and performance.
-- **Inference Efficiency**: Depth is estimated at a consistent resolution (e.g., 512px–1024px).
-- **Guided Upscaling**: The high-resolution original RGB image is used as a spatial map to upscale the low-resolution depth output. This ensures sharp edges that align with the photographic content without the VRAM cost of native high-resolution inference.
+## Performance & Technical Data
+This service uses **In-Situ Benchmarking** to provide factual data specific to your hardware. 
 
-## Performance Benchmarks (Approximate)
-Measurements taken on RTX 30-series / 40-series hardware:
-| Model Variant | Resolution | VRAM Usage | Processing Time |
-| :--- | :--- | :--- | :--- |
-| **DA3-Giant** | 512px | ~4.5 GB | 0.4s - 1.2s |
-| **DA3-Giant** | 1024px | ~8.5 GB | 1.5s - 2.8s |
-| **DA3-Large** | 512px | ~1.8 GB | 0.2s - 0.5s |
-| **DA3-Large** | 1024px | ~3.5 GB | 0.6s - 1.2s |
+- **Full Transparency**: At startup, the service detects your **Current Available VRAM**. This reflects the memory left while your game is already running.
+- **Automated Benchmark**: After you select a model, the service runs a 3-pass dry run on your GPU. It explicitly reports:
+    - **Actual Peak VRAM** used by the selected configuration.
+    - **Average Inference Speed** (ms) on your specific card.
+- **Guided Upscaling**: High-resolution detail is achieved via a **Guided Filter**, which upscales depth using your original image as a spatial map without the VRAM cost of native high-res inference.
 
 ## Aesthetic Options
 - **Standard**: Linear depth estimation.
-- **Boosted**: Applies a **Gamma power curve** ($depth = depth^{1.25}$) to the output. This increases relative contrast in the mid-to-far ranges. High-contrast areas (edges) remain structurally consistent with the standard output.
+- **Boosted**: Applies a **Gamma power curve** ($depth = depth^{1.25}$). This increases relative deep-field contrast for a more pronounced 3D effect.
 
 ## Usage
 1. Copy the `midas3` folder to the game's root directory.

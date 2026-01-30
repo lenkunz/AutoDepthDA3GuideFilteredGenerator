@@ -97,9 +97,19 @@ class MidasEmulator:
 
         print(f"[*] Midas DA3 Service Initialization")
         print(f"[*] Device: {self.device}")
-        print(f"[*] Memory: Reserving {vram_reserve}GB VRAM.")
+        
+        # Report actual free VRAM at start (Internal check, bypasses system path)
+        if self.device == "cuda":
+            free, total = torch.cuda.mem_get_info()
+            print(f"[*] VRAM Status: {free/1024**3:.1f} GB Available / {total/1024**3:.1f} GB Total")
+        
+        print(f"[*] Memory: Reserving {vram_reserve}GB Safety Margin.")
         
         self.load_model()
+        
+        # Perform in-situ benchmark
+        if self.device == "cuda":
+            self.run_benchmark()
 
     def load_model(self):
         print(f"[*] Initializing model {self.model_name}... (Will auto-download if missing)")
@@ -112,6 +122,69 @@ class MidasEmulator:
             print(f"[!] Model initialization failed: {e}")
             print("[*] Tip: Ensure you have an active internet connection for the first run.")
             sys.exit(1)
+
+    def run_benchmark(self):
+        """Perform a 3-pass benchmark to get actual hardware stats."""
+        print(f"[*] Running 3-pass Benchmark ({self.model_name} @ {self.resolution}px)...")
+        dummy_img = np.random.randint(0, 255, (self.resolution, self.resolution, 3), dtype=np.uint8)
+        
+        # Reset Peak Tracking
+        torch.cuda.reset_peak_memory_stats()
+        timings = []
+        
+        try:
+            for i in range(3):
+                start = time.time()
+                with torch.no_grad():
+                    with torch.autocast(device_type=self.device, dtype=torch.float16):
+                        _ = self.model.inference([dummy_img], process_res=self.resolution)
+                timings.append(time.time() - start)
+            
+            avg_time = sum(timings) / len(timings)
+            peak_vram = torch.cuda.max_memory_reserved() / (1024**3)
+            
+            print(f"[+] BENCHMARK STATS (Actual Hardware):")
+            print(f"    - Peak VRAM Usage:  {peak_vram:.2f} GB")
+            print(f"    - Avg Inference:    {avg_time*1000:.0f} ms")
+            print(f"    - Note: This is your real-world performance baseline.\n")
+            
+        except Exception as e:
+            print(f"[!] Benchmark Failed: {e}")
+        finally:
+            torch.cuda.empty_cache()
+            gc.collect()
+
+    def run_benchmark(self):
+        """Perform a 3-pass dry-run to get actual hardware statistics."""
+        print(f"[*] Measuring hardware performance ({self.model_name} @ {self.resolution}px)...")
+        dummy_img = np.random.randint(0, 255, (self.resolution, self.resolution, 3), dtype=np.uint8)
+        
+        # Reset Peak Tracking
+        torch.cuda.reset_peak_memory_stats()
+        timings = []
+        
+        try:
+            for i in range(3):
+                start = time.time()
+                with torch.no_grad():
+                    with torch.autocast(device_type=self.device, dtype=torch.float16 if self.device == "cuda" else torch.float32):
+                        _ = self.model.inference([dummy_img], process_res=self.resolution)
+                timings.append(time.time() - start)
+            
+            avg_time = sum(timings) / len(timings)
+            peak_vram = torch.cuda.max_memory_reserved() / (1024**3)
+            
+            print(f"[+] MEASURED PERFORMANCE (Not Estimate):")
+            print(f"    - Peak VRAM Consumption: {peak_vram:.2f} GB")
+            print(f"    - Average Inference:     {avg_time*1000:.0f} ms")
+            print(f"    - Note: This is your unique hardware baseline.\n")
+            
+        except Exception as e:
+            print(f"[!] Benchmark Failed: {e}")
+            print(f"[!] Your hardware may lack required VRAM for this resolution.")
+        finally:
+            torch.cuda.empty_cache()
+            gc.collect()
 
     def process_image(self, img_path, out_path, silent=False):
         try:
