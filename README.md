@@ -5,18 +5,6 @@
 2. In-game, set the Depth Model to **Manual**.
 3. Run `Run_Service.bat`.
 
-## Webhook 
-If you want to trigger other tools, add a `webhook_url` to `config.json`.
+*Note: The service will automatically monitor the `input/` and `output/` folders in your game root.*
 
-**Example Payload (POST):**
-```json
-{
-  "event": "depth_generated",
-  "input_image": "C:\\Games\\AutoDepth\\input\\photo.jpg",
-  "output_depth": "C:\\Games\\AutoDepth\\output\\photo.pfm",
-  "model": "da3-giant",
-  "resolution": 1024,
-  "duration_s": 0.452,
-  "timestamp": 1706631234.567
-}
-```
+

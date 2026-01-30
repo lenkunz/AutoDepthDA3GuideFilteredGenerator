@@ -119,11 +119,14 @@ try {
     $pythonExe = Join-Path $venvPath "Scripts\python.exe"
   }
 
-  # 4. Directories
-  Write-Host "[*] Ensuring directories exist..."
-  foreach ($dir in @("input", "output")) {
-    $path = Join-Path $PSScriptRoot $dir
-    if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path | Out-Null }
+  # 4. Directories (Parent-relative for game integration)
+  Write-Host "[*] Ensuring communication directories exist..."
+  $parentDir = Split-Path $PSScriptRoot -Parent
+  $inPath = Join-Path $parentDir "input"
+  $outPath = Join-Path $parentDir "output"
+
+  foreach ($dirPath in @($inPath, $outPath)) {
+    if (-not (Test-Path $dirPath)) { New-Item -ItemType Directory -Path $dirPath | Out-Null }
   }
 
   # 5. Dependency Check & Top-off
@@ -136,8 +139,16 @@ try {
 
   # 6. Run
   Write-Host "`n[+] Environment ready. Starting DA3 Service..." -ForegroundColor Green
-  Write-Host "[*] Monitoring 'input/' for requests...`n" -ForegroundColor Gray
-  & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") --continuous --input_path "input" --output_path "output"
+  Write-Host "[*] Monitoring '$inPath' for requests...`n" -ForegroundColor Gray
+
+  # Set CWD to game root so image paths in .txt files resolve correctly
+  Push-Location $parentDir
+  try {
+    & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") --continuous --input_path "$inPath" --output_path "$outPath"
+  }
+  finally {
+    Pop-Location
+  }
 
 }
 catch {
