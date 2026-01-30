@@ -2,8 +2,11 @@ import sys
 import os
 import argparse
 import torch
+import torch.nn.functional as F
 import numpy as np
 from PIL import Image
+import time
+import gc
 
 # Python version check
 if sys.version_info < (3, 10):
@@ -41,6 +44,43 @@ def save_pfm(path, image, scale=-1.0):
         image_to_save = np.flipud(image).astype(np.float32)
         f.write(image_to_save.tobytes())
 
+class GuidedFilter(torch.nn.Module):
+    def __init__(self, r, eps=1e-2):
+        super(GuidedFilter, self).__init__()
+        self.r = r
+        self.eps = eps
+
+    def forward(self, lr_depth, hr_guide):
+        # lr_depth: (B, 1, h, w)
+        # hr_guide: (B, 3, H, W) 
+        
+        # Simple box filter via AvgPool
+        def box_filter(x, r):
+            return torch.nn.functional.avg_pool2d(x, kernel_size=2*r+1, stride=1, padding=r)
+
+        # Upsample LR depth to HR guide size
+        B, C, H, W = hr_guide.shape
+        p = torch.nn.functional.interpolate(lr_depth, size=(H, W), mode='bilinear', align_corners=False)
+        I = hr_guide.mean(dim=1, keepdim=True) # Guidance as grayscale
+        
+        N = box_filter(torch.ones(B, 1, H, W, device=hr_guide.device), self.r)
+        
+        mean_I = box_filter(I, self.r) / N
+        mean_p = box_filter(p, self.r) / N
+        mean_Ip = box_filter(I * p, self.r) / N
+        cov_Ip = mean_Ip - mean_I * mean_p
+        
+        mean_II = box_filter(I * I, self.r) / N
+        var_I = mean_II - mean_I * mean_I
+        
+        a = cov_Ip / (var_I + self.eps)
+        b = mean_p - a * mean_I
+        
+        mean_a = box_filter(a, self.r) / N
+        mean_b = box_filter(b, self.r) / N
+        
+        return mean_a * I + mean_b
+
 class MidasEmulator:
     def __init__(self, model_name="da3-giant", resolution=1024, vram_reserve=6.0):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -50,6 +90,9 @@ class MidasEmulator:
         self.model_name = model_name
         self.processing_times = []
         
+        # Guided Filter (r=8, eps=1e-2 is standard for depth)
+        self.gf = GuidedFilter(r=8, eps=1e-2)
+
         print(f"[*] Midas DA3 Service Initialization")
         print(f"[*] Device: {self.device}")
         print(f"[*] Memory: Reserving {vram_reserve}GB VRAM.")
@@ -86,24 +129,35 @@ class MidasEmulator:
 
             # Load and inference
             img_pil = Image.open(img_path).convert("RGB")
+            orig_w, orig_h = img_pil.size
             img_np = np.array(img_pil)
+            
+            # Prepare guidance image (normalized)
+            img_tensor = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0).to(self.device).float() / 255.0
             
             with torch.no_grad():
                 with torch.autocast(device_type=self.device, dtype=torch.float16 if self.device == "cuda" else torch.float32):
                     prediction = self.model.inference([img_np], process_res=self.resolution)
             
-            depth = prediction.depth[0]
-            if hasattr(depth, 'cpu'): depth = depth.cpu().numpy()
+            depth = prediction.depth[0] # This is a numpy array (N, H, W) from the API
             
-            # MinMax Normalization (Standard for AutoDepthMod .pfm)
-            d_min, d_max = depth.min(), depth.max()
-            depth_norm = (depth - d_min) / (d_max - d_min + 1e-8)
+            # Convert to tensor for Guided Filter
+            depth_t = torch.from_numpy(depth).unsqueeze(0).unsqueeze(0).to(self.device)
+            
+            # Apply Guided Upscaling to original image resolution
+            depth_hr = self.gf(depth_t, img_tensor)
+            
+            depth_final = depth_hr.squeeze().cpu().numpy()
+            
+            # MinMax Normalization
+            d_min, d_max = depth_final.min(), depth_final.max()
+            depth_norm = (depth_final - d_min) / (d_max - d_min + 1e-8)
             
             save_pfm(out_path, depth_norm)
-            if not silent: print(f"[+] Done -> {os.path.basename(out_path)}")
+            if not silent: print(f"[+] Fidelity Upscale ({orig_w}x{orig_h}) -> {os.path.basename(out_path)}")
             
             # Post-flight cleanup
-            del prediction; del depth; del img_np
+            del prediction; del depth; del depth_t; del depth_hr; del img_tensor; del img_np
             if self.device == "cuda":
                 torch.cuda.empty_cache()
                 gc.collect()
