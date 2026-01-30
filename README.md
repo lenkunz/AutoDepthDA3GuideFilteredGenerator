@@ -1,8 +1,8 @@
-# AutoDepth Depth V3 Upgrade
+# DA3 Service Optimizer
 
-Upgrade your image viewer with high-fidelity, stable 3D depth generation. 
+An optimized, standalone environment for Depth Anything V3 with real-time progress tracking and resource management.
 
-For a look at the visual improvements this brings to your images, see [ABOUTTHIS.md](ABOUTTHIS.md).
+For details on the workflow advantages and optimization, see [ABOUTTHIS.md](ABOUTTHIS.md).
 
 ## Usage
 1. Copy the `midas3` folder into your game root.

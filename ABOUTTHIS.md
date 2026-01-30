@@ -1,21 +1,19 @@
-# The Global Depth V3 Experience
+# DA3 Service Optimizer
 
-This update transforms your image viewing experience with **Depth Anything V3**, providing the highest level of 3D visual fidelity currently possible.
+This service provides an optimized, standalone environment for managing and running your **Depth Anything V3** requests.
 
-## What changes for you?
-When you use a standard viewer, 3D depth can often feel "wobbly," blurry, or look like jelly around the edges. This implementation replaces that experience with cutting-edge AI to deliver:
+## What makes this different?
+While you may already be using Depth Anything, this specific implementation is designed to streamline your workflow and save resources:
 
-- **Surgical Precision**: Delicate edges (like hair, wires, or tree branches) stay perfectly sharp and distinct in 3D.
-- **Deep Immersion**: Objects are placed with mathematical accuracy in the background, creating a true sense of scale and distance.
-- **Rock-Solid Stability**: The 3D effect remains stable even when looking at complex textures, removing the "shimmering" seen in older technology.
+- **Dedicated Workflow Dashboard**: Unlike the native background process, this provides a clear interactive dashboard for batch processing. You get real-time feedback on progress, generation speed, and a precise **ETC** (Estimated Time of Completion).
+- **Resource Efficiency**: It intelligently shares system libraries to avoid redundant 5GB+ downloads, keeping your installation lean and fast.
+- **Isolated Stability**: By running as a standalone service, it ensures that your depth generation remains stable and doesn't conflict with other game processes.
+- **Interactive Control**: Choose between different model sizes and resolutions on-the-fly to match your hardware's VRAM capacity.
 
-## Why this implementation?
-We focused on three things that make your workflow better:
-1. **Instant Visual Upgrade**: Just run it and your depth maps are immediately better.
-2. **Space Efficient**: It intelligently reuses what’s already on your computer, so you don’t waste disk space on redundant files.
-3. **Live Progress**: You can actually see what’s happening. Our dashboard tells you exactly how many seconds are left when processing large collections of images.
+## Integration
+This tool acts as a transparent bridge. It catches requests and fulfills them using an optimized DA3 engine, allowing for a "zero-patch" experience where you can upgrade or swap models without modifying core game files.
 
 ## Quick Start
 1. Copy the `midas3` folder into your game root.
-2. Run `Run_Service.bat` and follow the prompts.
+2. Run `Run_Service.bat`.
 3. In-game, set the Depth Model to **Manual**.
