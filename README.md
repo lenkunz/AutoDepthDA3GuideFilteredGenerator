@@ -1,10 +1,10 @@
-# AutoDepth DA3 Quick Start
+# AutoDepth Depth V3 Upgrade
 
-This service provides a **high-fidelity V3 visual upgrade** for your game, replacing the native depth generation with state-of-the-art AI for sharper, more stable 3D results.
+Upgrade your image viewer with high-fidelity, stable 3D depth generation. 
 
-For a detailed look at the visual advantages, see [ABOUTTHIS.md](ABOUTTHIS.md).
+For a look at the visual improvements this brings to your images, see [ABOUTTHIS.md](ABOUTTHIS.md).
 
 ## Usage
 1. Copy the `midas3` folder into your game root.
-2. Run `Run_Service.bat` and follow the prompts.
+2. Run `Run_Service.bat`.
 3. In-game, set the Depth Model to **Manual**.
