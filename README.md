@@ -1,8 +1,8 @@
 # Depth Anything V3 Standalone Service
 
-A standalone environment for Depth Anything V3 featuring an interactive dashboard and integrated resource management.
+A modular execution environment for Depth Anything V3. This implementation focuses on visibility, disk efficiency, and protocol compatibility.
 
-For details on the features and usage, see [ABOUTTHIS.md](ABOUTTHIS.md).
+For the technical methodology and reasoning, see [ABOUTTHIS.md](ABOUTTHIS.md).
 
 ## Usage
 1. Copy the `midas3` folder into your game root.
