@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 import time
 import gc
+import msvcrt # Windows-specific key detection
 
 # Python version check
 if sys.version_info < (3, 10):
@@ -82,10 +83,11 @@ class GuidedFilter(torch.nn.Module):
         return mean_a * I + mean_b
 
 class MidasEmulator:
-    def __init__(self, model_name="da3-giant", resolution=1024, vram_reserve=6.0):
+    def __init__(self, model_name="da3-giant", resolution=1024, vram_reserve=6.0, boost=1.0):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.resolution = resolution
         self.vram_reserve = vram_reserve
+        self.boost = boost # Gamma adjustment for depth contrast
         self.model = None
         self.model_name = model_name
         self.processing_times = []
@@ -149,10 +151,15 @@ class MidasEmulator:
             
             depth_final = depth_hr.squeeze().cpu().numpy()
             
-            # MinMax Normalization
+            # MinMax Normalization (Standard for AutoDepthMod .pfm)
             d_min, d_max = depth_final.min(), depth_final.max()
             depth_norm = (depth_final - d_min) / (d_max - d_min + 1e-8)
             
+            # --- DEPTH BOOST (Address "Flatness" complaints) ---
+            # Applying a power curve (Gamma) can make depth look "deeper"
+            if hasattr(self, 'boost') and self.boost != 1.0:
+                depth_norm = np.power(depth_norm, self.boost)
+
             save_pfm(out_path, depth_norm)
             if not silent: print(f"[+] Fidelity Upscale ({orig_w}x{orig_h}) -> {os.path.basename(out_path)}")
             
@@ -181,6 +188,7 @@ class MidasEmulator:
 
     def watch_mode(self, input_dir, output_dir):
         print(f"[*] WATCH MODE ACTIVE. Monitoring: {input_dir}")
+        print("[*] HOTKEYS: [R] Reselect Model | [Q] Quit Cleanly")
         processed_mtimes = {}
         session_processed = 0
         session_start_time = 0
@@ -251,9 +259,23 @@ class MidasEmulator:
                 if len(processed_mtimes) > 500:
                     processed_mtimes = {k: v for k, v in processed_mtimes.items() if k in txt_files}
 
+                # Check for Hotkeys (Model Reselect)
+                if msvcrt.kbhit():
+                    key = msvcrt.getch().decode('utf-8', errors='ignore').lower()
+                    if key == 'r':
+                        print("\n[!] 'R' pressed. Returning to Model Selection...")
+                        if self.device == "cuda": torch.cuda.empty_cache()
+                        sys.exit(55) # Special code for restart in launcher
+                    elif key == 'q':
+                        print("\n[*] Quitting cleanly...")
+                        if self.device == "cuda": torch.cuda.empty_cache()
+                        sys.exit(0)
+
                 time.sleep(0.1)
             except KeyboardInterrupt:
-                break
+                print("\n[!] User Interrupted (Ctrl+C). Cleaning up VRAM...")
+                if torch.cuda.is_available(): torch.cuda.empty_cache()
+                sys.exit(0)
             except Exception as e:
                 print(f"[!] Watch error: {e}")
                 time.sleep(1)
@@ -268,11 +290,11 @@ def show_menu():
      
     [1] DA3-Giant (~2.5 GB Model)
         - VRAM: ~4.5GB (512px) | ~8.5GB (1024px)
-    [2] DA3-Mono-Large (~1.3 GB Model)
-        - VRAM: ~3.0GB (512px) | ~5.5GB (1024px)
-    [3] DA3-Large (~1.3 GB Model) 
-        - VRAM: ~3.0GB (512px) | ~5.5GB (1024px)
-    [4] DA3-Base (~360 MB Model)
+    [2] DA3-Large (~0.8 GB Model) 
+        - VRAM: ~1.8GB (512px) | ~3.5GB (1024px)
+    [3] DA3-Metric-Large (~0.8 GB Model)
+        - VRAM: ~1.8GB (512px) | ~3.5GB (1024px) | Metric Scale
+    [4] DA3-Medium/Base (~250 MB Model)
         - VRAM: ~1.2GB (512px) | ~2.0GB (1024px)
     [5] DA3-Small (~100 MB Model)
         - VRAM: ~0.8GB (512px) | ~1.2GB (1024px)
@@ -281,8 +303,8 @@ def show_menu():
     m_choice = input("Select Model [1-5]: ").strip()
     m_mapping = {
         "1": "da3-giant",
-        "2": "da3mono-large",
-        "3": "da3-large",
+        "2": "da3-large",
+        "3": "da3metric-large",
         "4": "da3-base",
         "5": "da3-small"
     }
@@ -325,6 +347,7 @@ if __name__ == "__main__":
     parser.add_argument("--cache", action="store_true", help="Save depth next to original images")
     parser.add_argument("--delete", action="store_true", help="Ignored")
     parser.add_argument("--optimize", action="store_true", help="Ignored")
+    parser.add_argument("--boost", type=float, default=1.0, help="Depth Contrast (Gamma). Try 1.2 or 1.5 for more 'pop'")
     
     args = parser.parse_args()
 
@@ -354,7 +377,7 @@ if __name__ == "__main__":
         print(f"[*] Technical request '{target_model}' -> Using {technical_mapping[target_model]}")
         target_model = technical_mapping[target_model]
 
-    emulator = MidasEmulator(model_name=target_model, resolution=target_res)
+    emulator = MidasEmulator(model_name=target_model, resolution=target_res, boost=args.boost)
     emulator.cache_local = args.cache # Set local cache preference
     
     # Final Hardware Check / Warning

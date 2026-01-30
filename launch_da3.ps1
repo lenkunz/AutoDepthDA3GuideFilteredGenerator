@@ -15,10 +15,19 @@ function Get-HardwareStatus {
   
   # Try to get VRAM via NVIDIA-SMI if available
   try {
+    # Fix: Format string must not have spaces
     $nvsmi = & "nvidia-smi" --query-gpu=memory.free --format=csv, noheader, nounits 2>$null
     if ($LASTEXITCODE -eq 0) {
       $vram = "$([math]::Round($nvsmi / 1024, 1)) GB Free"
       $cuda = "Available (NVIDIA)"
+    }
+    else {
+      # Fallback: Check if an NVIDIA GPU exists at all via CIM
+      $gpu = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -like "*NVIDIA*" }
+      if ($gpu) {
+        $vram = "Detected ($($gpu.Name))"
+        $cuda = "Found (NVIDIA-SMI Missing from PATH)"
+      }
     }
   }
   catch {}
@@ -29,18 +38,27 @@ function Get-HardwareStatus {
 function Select-Model {
   Write-Host "`n[?] MODEL SELECTION" -ForegroundColor Yellow
   Write-Host "--------------------------------------------------------"
-  Write-Host "[1] DA3-Giant (~2.5 GB Model)"
-  Write-Host "    - VRAM: ~4.5GB (512px) | ~8.5GB (1024px)"
-  Write-Host "[2] DA3-Large (~0.8 GB Model)"
-  Write-Host "    - VRAM: ~1.8GB (512px) | ~3.5GB (1024px)"
+  Write-Host "[1] DA3-Giant (~2.5 GB)     | VRAM: ~4.5GB (512px) | ~8.5GB (1024px)"
+  Write-Host "[2] DA3-Large (~0.8 GB)     | VRAM: ~1.8GB (512px) | ~3.5GB (1024px)"
+  Write-Host "[3] DA3-Metric (~0.8 GB)    | Metric-Scale (Good for Scale)"
+  Write-Host "[4] DA3-Medium/Base (~250 MB) | Balanced"
+  Write-Host "[5] DA3-Small (~100 MB)       | Ultra Fast / VR"
   Write-Host "Note: Estimates represent total app VRAM usage."
   
   $choice = ""
-  while ($choice -notmatch "^[12]$") {
-    $choice = (Read-Host "Select [1-2]").Trim()
+  while ($choice -notmatch "^[1-5]$") {
+    $choice = (Read-Host "Select [1-5]").Trim()
   }
   
-  return if ($choice -eq "1") { "da3-giant" } else { "da3-large" }
+  $mapping = @{
+    "1" = "da3-giant"
+    "2" = "da3-large"
+    "3" = "da3metric-large"
+    "4" = "da3-base"
+    "5" = "da3-small"
+  }
+  
+  return $mapping[$choice]
 }
 
 function Get-CacheChoice {
@@ -49,6 +67,17 @@ function Get-CacheChoice {
   Write-Host "(This allows the mod to 'remember' depth for faster loading)"
   $choice = Read-Host "[y/N]"
   return ($choice -eq "y")
+}
+
+function Get-BoostChoice {
+  Write-Host "`n[?] DEPTH CONTRAST (BOOST)" -ForegroundColor Yellow
+  Write-Host "--------------------------------------------------------"
+  Write-Host "DA3 is mathematically accurate, but some find it 'flat'."
+  Write-Host "[1] Standard (Factual Accuracy)"
+  Write-Host "[2] Boosted  (More 'Pop' / Like DA2)"
+  
+  $choice = (Read-Host "Select [1-2]").Trim()
+  if ($choice -eq "2") { return 1.25 } else { return 1.0 }
 }
 
 function Get-OptimizationChoice {
@@ -120,6 +149,14 @@ function Save-PythonPath ($path) {
   $cfg_obj | ConvertTo-Json | Set-Content $CONFIG_FILE
 }
 
+# --- CONFIG & TRAP ---
+$SelectionLoop = $true
+trap {
+  Write-Host "`n[!] Interrupt detected. Cleaning up AI processes..." -ForegroundColor Red
+  Get-Process "python" -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*python*" -and $_.CommandLine -like "*midas3_emulator.py*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+  exit
+}
+
 try {
   # 0. Hardware Analysis
   $hw = Get-HardwareStatus
@@ -134,103 +171,124 @@ try {
     Write-Host "[!] Depth will take 30s+ per image. NVIDIA GPU recommended.`n" -ForegroundColor Red
   }
 
-  # 1. Start setup
-  $opt = Get-OptimizationChoice
-  $model = Select-Model
-  $doCache = Get-CacheChoice
-  $basePython = Get-PythonPath
+  while ($SelectionLoop) {
 
-  while ($null -eq $basePython) {
-    Write-Host "[!] No Python interpreter found." -ForegroundColor Yellow
-    Write-Host "Please choose an option:"
-    Write-Host "[1] Provide a manual path to python.exe"
-    Write-Host "[2] Exit and install Python 3.10+ from python.org"
-    $choice = Read-Host "Select [1-2]"
-    if ($choice -eq "1") {
-      $manual = Read-Host "Enter full path to python.exe"
-      if (Test-Path $manual) { $basePython = $manual }
-      else { Write-Host "[!] Path not found: $manual" -ForegroundColor Red }
+    # 1. Start setup
+    $opt = Get-OptimizationChoice
+    $model = Select-Model
+    $doCache = Get-CacheChoice
+    $boost = Get-BoostChoice
+    $basePython = Get-PythonPath
+
+    while ($null -eq $basePython) {
+      Write-Host "[!] No Python interpreter found." -ForegroundColor Yellow
+      Write-Host "Please choose an option:"
+      Write-Host "[1] Provide a manual path to python.exe"
+      Write-Host "[2] Exit and install Python 3.10+ from python.org"
+      $choice = Read-Host "Select [1-2]"
+      if ($choice -eq "1") {
+        $manual = Read-Host "Enter full path to python.exe"
+        if (Test-Path $manual) { $basePython = $manual }
+        else { Write-Host "[!] Path not found: $manual" -ForegroundColor Red }
+      }
+      else { exit 1 }
     }
-    else { exit 1 }
-  }
-  Write-Host "[+] Base Python: $basePython" -ForegroundColor Green
-  Save-PythonPath $basePython
+    Write-Host "[+] Base Python: $basePython" -ForegroundColor Green
+    Save-PythonPath $basePython
 
-  # 2. Check for capacity (Venv & Yanking)
-  Write-Host "[*] Verifying environment compatibility..."
-  $hasVenvMod = $false
-  $hasTorch = $false
+    # 2. Check for capacity (Venv & Yanking)
+    Write-Host "[*] Verifying environment compatibility..."
+    $hasVenvMod = $false
+    $hasTorch = $false
   
-  try {
-    $oldEAP = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
+    try {
+      $oldEAP = $ErrorActionPreference
+      $ErrorActionPreference = "Continue"
     
-    # Check venv
-    & $basePython -c "import venv; print('OK')" 2>$null
-    $hasVenvMod = ($LASTEXITCODE -eq 0)
+      # Check venv
+      & $basePython -c "import venv; print('OK')" 2>$null
+      $hasVenvMod = ($LASTEXITCODE -eq 0)
     
-    # Check torch
-    & $basePython -c "import torch; print('OK')" 2>$null
-    $hasTorch = ($LASTEXITCODE -eq 0)
+      # Check torch
+      & $basePython -c "import torch; print('CUDA:', torch.cuda.is_available())" 2>$null
+      $hasTorch = ($LASTEXITCODE -eq 0)
     
-    $ErrorActionPreference = $oldEAP
-  }
-  catch {
-    # Ignore errors during compatibility check, we just need $hasVenvMod/$hasTorch
-  }
-
-  $venvPath = Join-Path $PSScriptRoot "env"
-  $pythonExe = Join-Path $venvPath "Scripts\python.exe"
-
-  if ($opt -eq "yank" -and $hasTorch -and (-not (Test-Path $pythonExe))) {
-    # Check if we should do a DIRECT RUN instead of venv (if venv mod is missing)
-    if (-not $hasVenvMod) {
-      Write-Host "[!] Yanking: Base Python lacks 'venv' module but has 'torch'. Switching to Direct Run." -ForegroundColor Gray
-      $pythonExe = $basePython
+      # Verify if CUDA is actually usable by the AI
+      $null = & $basePython -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>$null
+      if ($LASTEXITCODE -ne 0 -and $cuda -ne "Not Found") {
+        Write-Host "`n[!] WARNING: NVIDIA GPU found, but your Python libraries are CPU-ONLY." -ForegroundColor Yellow
+        Write-Host "[!] Deep learning performance will be severely limited.`n" -ForegroundColor Yellow
+      }
+    
+      $ErrorActionPreference = $oldEAP
     }
-    else {
-      Write-Host "[*] Creating thin virtual environment (Reusing shared libraries)..." -ForegroundColor Yellow
-      & $basePython -m venv env --system-site-packages
+    catch {
+      # Ignore errors during compatibility check, we just need $hasVenvMod/$hasTorch
+    }
+
+    $venvPath = Join-Path $PSScriptRoot "env"
+    $pythonExe = Join-Path $venvPath "Scripts\python.exe"
+
+    if ($opt -eq "yank" -and $hasTorch -and (-not (Test-Path $pythonExe))) {
+      # Check if we should do a DIRECT RUN instead of venv (if venv mod is missing)
+      if (-not $hasVenvMod) {
+        Write-Host "[!] Yanking: Base Python lacks 'venv' module but has 'torch'. Switching to Direct Run." -ForegroundColor Gray
+        $pythonExe = $basePython
+      }
+      else {
+        Write-Host "[*] Creating thin virtual environment (Reusing shared libraries)..." -ForegroundColor Yellow
+        & $basePython -m venv env --system-site-packages
+        $pythonExe = Join-Path $venvPath "Scripts\python.exe"
+      }
+    }
+    elseif (-not (Test-Path $pythonExe)) {
+      if (-not $hasVenvMod) {
+        Write-Error "The chosen Python ($basePython) lacks the 'venv' module and required dependencies."
+      }
+      Write-Host "[*] Creating fresh virtual environment..." -ForegroundColor Yellow
+      & $basePython -m venv env
       $pythonExe = Join-Path $venvPath "Scripts\python.exe"
     }
-  }
-  elseif (-not (Test-Path $pythonExe)) {
-    if (-not $hasVenvMod) {
-      Write-Error "The chosen Python ($basePython) lacks the 'venv' module and required dependencies."
+
+    # 4. Directories (Service-local)
+    Write-Host "[*] Ensuring communication directories exist..."
+    $inPath = Join-Path $PSScriptRoot "input"
+    $outPath = Join-Path $PSScriptRoot "output"
+
+    foreach ($dir in @("input", "output")) {
+      $path = Join-Path $PSScriptRoot $dir
+      if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path | Out-Null }
     }
-    Write-Host "[*] Creating fresh virtual environment..." -ForegroundColor Yellow
-    & $basePython -m venv env
-    $pythonExe = Join-Path $venvPath "Scripts\python.exe"
-  }
 
-  # 4. Directories (Service-local)
-  Write-Host "[*] Ensuring communication directories exist..."
-  $inPath = Join-Path $PSScriptRoot "input"
-  $outPath = Join-Path $PSScriptRoot "output"
+    # 5. Dependency Check & Top-off
+    Write-Host "[*] Verifying/Installing missing components..." -ForegroundColor Yellow
+    & $pythonExe -m pip install --upgrade pip | Out-Null
+    $reqPath = Join-Path $PSScriptRoot "requirements.txt"
+    if (Test-Path $reqPath) {
+      & $pythonExe -m pip install -r $reqPath
+    }
 
-  foreach ($dir in @("input", "output")) {
-    $path = Join-Path $PSScriptRoot $dir
-    if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path | Out-Null }
-  }
-
-  # 5. Dependency Check & Top-off
-  Write-Host "[*] Verifying/Installing missing components..." -ForegroundColor Yellow
-  & $pythonExe -m pip install --upgrade pip | Out-Null
-  $reqPath = Join-Path $PSScriptRoot "requirements.txt"
-  if (Test-Path $reqPath) {
-    & $pythonExe -m pip install -r $reqPath
-  }
-
-  # 6. Run
-  Write-Host "`n[+] Environment ready. Starting DA3 Service..." -ForegroundColor Green
-  Write-Host "[!] Note: Ensure Game 'Depth Model' is set to MANUAL for this session.`n" -ForegroundColor Yellow
-  Write-Host "[*] Monitoring '$inPath' for requests...`n" -ForegroundColor Gray
+    # 6. Run
+    Write-Host "`n[+] Environment ready. Starting DA3 Service..." -ForegroundColor Green
+    Write-Host "[!] Note: Ensure Game 'Depth Model' is set to MANUAL for this session.`n" -ForegroundColor Yellow
+    Write-Host "[*] Monitoring '$inPath' for requests...`n" -ForegroundColor Gray
   
-  $emuArgs = @("--continuous", "--input_path", "$inPath", "--output_path", "$outPath", "--model_name", "$model")
-  if ($doCache) { $emuArgs += "--cache" }
+    $emuArgs = @("--continuous", "--input_path", "$inPath", "--output_path", "$outPath", "--model_name", "$model", "--boost", "$boost")
+    if ($doCache) { $emuArgs += "--cache" }
   
-  & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") $emuArgs
+    # Run and capture exit code
+    & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") $emuArgs
+  
+    $code = $LASTEXITCODE
+    if ($code -eq 55) {
+      Write-Host "`n[*] Restarting Model Selection..." -ForegroundColor Cyan
+      continue
+    }
+  
+    # If we get here, the service stopped normally (or crashed)
+    $SelectionLoop = $false
 
+  }
 }
 catch {
   Write-Host "`n[!] SETUP FAILED: $($_.Exception.Message)" -ForegroundColor Red
