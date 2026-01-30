@@ -139,8 +139,8 @@ try {
 
   # 6. Run
   Write-Host "`n[+] Environment ready. Starting DA3 Service..." -ForegroundColor Green
-  Write-Host "[*] Monitoring 'input/' for requests...`n" -ForegroundColor Gray
-  & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") --continuous --input_path "input" --output_path "output"
+  Write-Host "[*] Monitoring '$inPath' for requests...`n" -ForegroundColor Gray
+  & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") --continuous --input_path "$inPath" --output_path "$outPath"
 
 }
 catch {
