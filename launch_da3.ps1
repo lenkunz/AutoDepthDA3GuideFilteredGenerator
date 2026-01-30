@@ -172,7 +172,7 @@ try {
     Write-Host "[!] Depth will take 30s+ per image. NVIDIA GPU recommended.`n" -ForegroundColor Red
   }
 
-  Write-Host "[*] Note: A 3-pass hardware benchmark will run after selection." -ForegroundColor Gray
+  Write-Host "[*] Note: You will be asked if you want to run a hardware benchmark after selection." -ForegroundColor Gray
 
   while ($SelectionLoop) {
 

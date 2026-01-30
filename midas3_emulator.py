@@ -83,11 +83,12 @@ class GuidedFilter(torch.nn.Module):
         return mean_a * I + mean_b
 
 class MidasEmulator:
-    def __init__(self, model_name="da3-giant", resolution=1024, vram_reserve=6.0, boost=1.0):
+    def __init__(self, model_name="da3-giant", resolution=1024, vram_reserve=6.0, boost=1.0, run_bench=False):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.resolution = resolution
         self.vram_reserve = vram_reserve
         self.boost = boost # Gamma adjustment for depth contrast
+        self.run_bench = run_bench
         self.model = None
         self.model_name = model_name
         self.processing_times = []
@@ -107,8 +108,8 @@ class MidasEmulator:
         
         self.load_model()
         
-        # Perform in-situ benchmark
-        if self.device == "cuda":
+        # Perform in-situ benchmark (Actual Hardware Measurement)
+        if self.device == "cuda" and self.run_bench:
             self.run_benchmark()
 
     def load_model(self):
@@ -406,9 +407,10 @@ def show_menu():
     
     print("\n[!] IMPORTANT: Set Game 'Depth Model' to MANUAL now.")
     print("[!] Otherwise, the game will ignore this service.\n")
-    time.sleep(2)
     
-    return model, res
+    do_bench = input("Run Performance Benchmark? (Actual ms/Peak GB) [y/N]: ").strip().lower() == 'y'
+    
+    return model, res, do_bench
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Midas DA3 Service")
@@ -422,6 +424,8 @@ if __name__ == "__main__":
     parser.add_argument("--optimize", action="store_true", help="Ignored")
     parser.add_argument("--boost", type=float, default=1.0, help="Depth Contrast (Gamma). Try 1.2 or 1.5 for more 'pop'")
     
+    parser.add_argument("--benchmark", action="store_true", help="Run 3-pass hardware performance test")
+    
     args = parser.parse_args()
 
     # Ensure directories exist
@@ -431,11 +435,13 @@ if __name__ == "__main__":
     # TUI Model/Res Selection if not forced by CLI
     target_model = args.model_type
     target_res = args.height
+    target_bench = args.benchmark
 
     if not target_model or not target_res:
-        t_model, t_res = show_menu()
+        t_model, t_res, t_bench = show_menu()
         if not target_model: target_model = t_model
         if not target_res: target_res = t_res
+        if not args.benchmark: target_bench = t_bench
         print(f"[*] Config: {target_model} @ {target_res}px")
         time.sleep(0.5)
 
@@ -450,7 +456,7 @@ if __name__ == "__main__":
         print(f"[*] Technical request '{target_model}' -> Using {technical_mapping[target_model]}")
         target_model = technical_mapping[target_model]
 
-    emulator = MidasEmulator(model_name=target_model, resolution=target_res, boost=args.boost)
+    emulator = MidasEmulator(model_name=target_model, resolution=target_res, boost=args.boost, run_bench=target_bench)
     emulator.cache_local = args.cache # Set local cache preference
     
     # Final Hardware Check / Warning

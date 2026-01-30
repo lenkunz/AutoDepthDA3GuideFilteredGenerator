@@ -3,12 +3,12 @@
 This service provides a depth estimation pipeline optimized for high visual fidelity and VRAM efficiency in VR.
 
 ## Performance & Technical Data
-This service uses **In-Situ Benchmarking** to provide factual data specific to your hardware. 
+This service uses **In-Situ Benchmarking** to provide factual data specific to your hardware.
 
-- **Full Transparency**: At startup, the service detects your **Current Available VRAM**. This reflects the memory left while your game is already running.
-- **Automated Benchmark**: After you select a model, the service runs a 3-pass dry run on your GPU. It explicitly reports:
-    - **Actual Peak VRAM** used by the selected configuration.
-    - **Average Inference Speed** (ms) on your specific card.
+- **In-Situ Benchmarking (Optional)**: After selecting a model, you can choose to run a 3-pass dry run.
+    - **Measured Stats**: Reports the **Actual Peak VRAM** and **Average Speed** on your specific GPU.
+    - **Skip Option**: You can skip this step to save VRAM and start processing immediate game requests.
+- **VRAM Transparency**: At startup, the service detects your **Current Available VRAM**. This reflects the memory left while your game is already running.
 - **Guided Upscaling**: High-resolution detail is achieved via a **Guided Filter**, which upscales depth using your original image as a spatial map without the VRAM cost of native high-res inference.
 
 ## Aesthetic Options
