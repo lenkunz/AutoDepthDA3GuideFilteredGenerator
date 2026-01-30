@@ -1,0 +1,11 @@
+# About This Implementation
+
+This service acts as a transparent **Emulator** for the native depth engine, allowing you to use **Depth Anything V3** without complex modding or code changes.
+
+## What is this trying to do?
+Instead of forcing you to patch the game, this tool mimics the way the game already talks to its background processes. It "sits in the middle," catching depth requests and fulfilling them using high-quality V3 models.
+
+## Key Advantages
+- **Zero-Patch**: Works instantly with any mod that supports the standard communication protocol.
+- **Save Disk Space**: Smartly reuses (yanks) existing AI libraries already present on your system, avoiding redundant 5GB+ downloads.
+- **Visual Feedback**: Provides a clear interface with real-time progress and time estimation for batch processing.
