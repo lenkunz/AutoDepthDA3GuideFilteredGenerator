@@ -1,6 +1,8 @@
 # AutoDepth DA3 Quick Start
 
-For a detailed explanation of how this works, see [ABOUTTHIS.md](ABOUTTHIS.md).
+This service provides a **high-fidelity V3 visual upgrade** for your game. It replaces the native depth generation with state-of-the-art AI for sharper, more stable 3D results.
+
+For a detailed look at the visual advantages, see [ABOUTTHIS.md](ABOUTTHIS.md).
 
 ## Usage
 1. Copy the `midas3` folder into your game root.

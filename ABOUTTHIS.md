@@ -1,11 +1,17 @@
-# About This Implementation
+# About Global Depth V3 Service
 
-This service acts as a transparent **Emulator** for the native depth engine, allowing you to use **Depth Anything V3** without complex modding or code changes.
+This service enables **Depth Anything V3** (the latest state-of-the-art AI) for your image viewing experience, providing a massive visual upgrade over the native game models.
 
-## What is this trying to do?
-Instead of forcing you to patch the game, this tool mimics the way the game already talks to its background processes. It "sits in the middle," catching depth requests and fulfilling them using high-quality V3 models.
+## Why use Depth Anything V3?
+The original game models often struggle with complex scenes—creating blurry edges or "jelly-like" distortions in 3D. This implementation replaces that engine with V3 technology to achieve:
 
-## Key Advantages
-- **Zero-Patch**: Works instantly with any mod that supports the standard communication protocol.
-- **Save Disk Space**: Smartly reuses (yanks) existing AI libraries already present on your system, avoiding redundant 5GB+ downloads.
-- **Visual Feedback**: Provides a clear interface with real-time progress and time estimation for batch processing.
+- **Ultra-Sharp Details**: Fine edges like hair, foliage, and intricate objects are captured with surgical precision.
+- **Perfect Stability**: Removes the "swimming" or "pulsing" artifacts seen in older models for a solid, immersive 3D feeling.
+- **True Background Depth**: Objects feel correctly placed in 3D space, preventing the "flattened" look in distant landscapes.
+
+## Zero-Impact "Emulator" Design
+We built this to be transparent. It sits in the middle and acts as an "emulator" for the game's native depth engine. Because it mimics the game's own language, you can upgrade your visuals without ever having to patch or modify your core game files.
+
+## Optimization & Monitoring
+- **Disk Efficiency**: Smartly reuses (yanks) existing AI libraries from your system to avoid redundant 5GB downloads.
+- **Real-Time Tracking**: Provides a clear dashboard during batch processing with precise time estimation (ETC).
