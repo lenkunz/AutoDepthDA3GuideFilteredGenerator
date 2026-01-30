@@ -1,3 +1,4 @@
 {
-  "optimization": "yank"
+    "optimization":  "yank",
+    "python_path":  "C:\\Users\\Souta\\source\\repos\\AutoDepthMod\\Depth-Anything-3\\Python310\\python.exe"
 }

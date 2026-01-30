@@ -16,16 +16,9 @@ function Get-OptimizationChoice {
   }
 
   Write-Host "[?] Optimization Selection (Recommended for First Run)" -ForegroundColor Yellow
-  Write-Host "Aggressive Yanking can reuse the game's massive AI libraries (torch) to save 5GB+ disk space."
-  Write-Host "[1] Aggressive Yanking (Shared Libraries / Thin 10MB env / Fast)"
-  Write-Host "[2] Fresh Environment (Isolated Download / Full 5GB env / Slow)"
+  Write-Host "Aggressive reuse the game's massive AI libraries (torch) to save 5GB+ disk space."
     
-  $choice = ""
-  while ($choice -notmatch "^[12]$") {
-    $choice = (Read-Host "Select [1-2]").Trim()
-  }
-
-  $opt = if ($choice -eq "1") { "yank" } else { "fresh" }
+  $opt = "yank"
     
   # Save choice
   $cfg = @{ optimization = $opt }
@@ -35,6 +28,12 @@ function Get-OptimizationChoice {
 }
 
 function Get-PythonPath {
+  $cfg = if (Test-Path $CONFIG_FILE) { Get-Content $CONFIG_FILE | ConvertFrom-Json } else { @{} }
+  if ($null -ne $cfg.python_path -and (Test-Path $cfg.python_path)) {
+    Write-Host "[*] Using saved Python path: $($cfg.python_path)" -ForegroundColor Gray
+    return $cfg.python_path
+  }
+
   Write-Host "[*] Searching for DA3-compatible Python..." -ForegroundColor Gray
   $candidates = @()
   # local/parent
@@ -67,6 +66,18 @@ function Get-PythonPath {
   return $null
 }
 
+function Save-PythonPath ($path) {
+  $cfg = if (Test-Path $CONFIG_FILE) { Get-Content $CONFIG_FILE | ConvertFrom-Json -ErrorAction SilentlyContinue } else { @{} }
+  if ($null -eq $cfg) { $cfg = @{} }
+  
+  $cfg_obj = [ordered]@{
+    optimization = if ($null -ne $cfg.optimization) { $cfg.optimization } else { "yank" }
+    python_path  = $path
+  }
+  
+  $cfg_obj | ConvertTo-Json | Set-Content $CONFIG_FILE
+}
+
 try {
   # 1. Start setup
   $opt = Get-OptimizationChoice
@@ -85,8 +96,8 @@ try {
     }
     else { exit 1 }
   }
-
   Write-Host "[+] Base Python: $basePython" -ForegroundColor Green
+  Save-PythonPath $basePython
 
   # 2. Check for capacity (Venv & Yanking)
   Write-Host "[*] Verifying environment compatibility..."
