@@ -156,6 +156,20 @@ class MidasEmulator:
             save_pfm(out_path, depth_norm)
             if not silent: print(f"[+] Fidelity Upscale ({orig_w}x{orig_h}) -> {os.path.basename(out_path)}")
             
+            # --- LOCAL CACHE (Save next to original image) ---
+            if hasattr(self, 'cache_local') and self.cache_local:
+                try:
+                    # Suffix for AutoDepthMod: [image].[res].f16.depth
+                    # We use height as the resolution indicator
+                    cache_name = f"{os.path.basename(img_path)}.{self.resolution}.f16.depth"
+                    cache_path = os.path.join(os.path.dirname(img_path), cache_name)
+                    
+                    # Convert to float16 and save raw binary
+                    depth_norm.astype(np.float16).tofile(cache_path)
+                    if not silent: print(f"[+] Local Cache Saved -> {cache_name}")
+                except Exception as cache_err:
+                    print(f"[!] Local Cache ERROR: {cache_err}")
+
             # Post-flight cleanup
             del prediction; del depth; del depth_t; del depth_hr; del img_tensor; del img_np
             if self.device == "cuda":
@@ -250,12 +264,18 @@ def show_menu():
       Depth Anything V3 - Model Selection
     ========================================
      Note: Sizes refer to pure model weights.
+     VRAM Estimate = Total App Usage
      
-    [1] DA3-Giant (~2.5 GB) - Best Quality
-    [2] DA3-Mono-Large (~1.3 GB) - Very High
-    [3] DA3-Large (~1.3 GB) - High Quality
-    [4] DA3-Base (~360 MB) - Balanced
-    [5] DA3-Small (~100 MB) - Fast / Low Profile
+    [1] DA3-Giant (~2.5 GB Model)
+        - VRAM: ~4.5GB (512px) | ~8.5GB (1024px)
+    [2] DA3-Mono-Large (~1.3 GB Model)
+        - VRAM: ~3.0GB (512px) | ~5.5GB (1024px)
+    [3] DA3-Large (~1.3 GB Model) 
+        - VRAM: ~3.0GB (512px) | ~5.5GB (1024px)
+    [4] DA3-Base (~360 MB Model)
+        - VRAM: ~1.2GB (512px) | ~2.0GB (1024px)
+    [5] DA3-Small (~100 MB Model)
+        - VRAM: ~0.8GB (512px) | ~1.2GB (1024px)
     ========================================
     """)
     m_choice = input("Select Model [1-5]: ").strip()
@@ -302,6 +322,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_path", type=str, default="output", help="Output directory")
     parser.add_argument("--continuous", action="store_true", help="Enable watch mode")
     parser.add_argument("--height", type=int, help="Resolution (Inference Size)")
+    parser.add_argument("--cache", action="store_true", help="Save depth next to original images")
     parser.add_argument("--delete", action="store_true", help="Ignored")
     parser.add_argument("--optimize", action="store_true", help="Ignored")
     
@@ -334,6 +355,7 @@ if __name__ == "__main__":
         target_model = technical_mapping[target_model]
 
     emulator = MidasEmulator(model_name=target_model, resolution=target_res)
+    emulator.cache_local = args.cache # Set local cache preference
     
     # Final Hardware Check / Warning
     if emulator.device == "cpu":

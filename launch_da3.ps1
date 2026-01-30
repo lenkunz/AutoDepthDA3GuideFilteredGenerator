@@ -9,14 +9,6 @@ Write-Host ""
 
 $CONFIG_FILE = Join-Path $PSScriptRoot "config.json"
 
-function Clean-Processes {
-  Write-Host "[*] Cleaning up existing AI processes..." -ForegroundColor Gray
-  $procs = Get-Process "python" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*midas3_emulator.py*" }
-  foreach ($p in $procs) {
-    try { Stop-Process $p.Id -Force -ErrorAction SilentlyContinue } catch {}
-  }
-}
-
 function Get-HardwareStatus {
   $vram = "Unknown"
   $cuda = "Not Found"
@@ -36,10 +28,12 @@ function Get-HardwareStatus {
 
 function Select-Model {
   Write-Host "`n[?] MODEL SELECTION" -ForegroundColor Yellow
-  Write-Host "-------------------------------------------"
-  Write-Host "[1] DA3-Giant (~2.5GB model) - BEST Quality (Needs >8GB VRAM)"
-  Write-Host "[2] DA3-Large (~0.8GB model) - Good Quality (Needs <6GB VRAM)"
-  Write-Host "Note: Sizes refer to model weight only, environment is shared."
+  Write-Host "--------------------------------------------------------"
+  Write-Host "[1] DA3-Giant (~2.5 GB Model)"
+  Write-Host "    - VRAM: ~4.5GB (512px) | ~8.5GB (1024px)"
+  Write-Host "[2] DA3-Large (~0.8 GB Model)"
+  Write-Host "    - VRAM: ~1.8GB (512px) | ~3.5GB (1024px)"
+  Write-Host "Note: Estimates represent total app VRAM usage."
   
   $choice = ""
   while ($choice -notmatch "^[12]$") {
@@ -47,6 +41,14 @@ function Select-Model {
   }
   
   return if ($choice -eq "1") { "da3-giant" } else { "da3-large" }
+}
+
+function Get-CacheChoice {
+  Write-Host "`n[?] SAVE DEPTH LOCALLY?" -ForegroundColor Yellow
+  Write-Host "--------------------------------------------------------"
+  Write-Host "(This allows the mod to 'remember' depth for faster loading)"
+  $choice = Read-Host "[y/N]"
+  return ($choice -eq "y")
 }
 
 function Get-OptimizationChoice {
@@ -119,8 +121,7 @@ function Save-PythonPath ($path) {
 }
 
 try {
-  # 0. Hardware & Cleanup
-  Clean-Processes
+  # 0. Hardware Analysis
   $hw = Get-HardwareStatus
   
   Write-Host "[*] HARDWARE ANALYSIS" -ForegroundColor Cyan
@@ -136,6 +137,7 @@ try {
   # 1. Start setup
   $opt = Get-OptimizationChoice
   $model = Select-Model
+  $doCache = Get-CacheChoice
   $basePython = Get-PythonPath
 
   while ($null -eq $basePython) {
@@ -221,9 +223,13 @@ try {
 
   # 6. Run
   Write-Host "`n[+] Environment ready. Starting DA3 Service..." -ForegroundColor Green
-  Write-Host "[!] IMPORTANT: Ensure game 'Depth Model' is set to MANUAL now.`n" -ForegroundColor Yellow
+  Write-Host "[!] Note: Ensure Game 'Depth Model' is set to MANUAL for this session.`n" -ForegroundColor Yellow
   Write-Host "[*] Monitoring '$inPath' for requests...`n" -ForegroundColor Gray
-  & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") --continuous --input_path "$inPath" --output_path "$outPath" --model_name "$model"
+  
+  $emuArgs = @("--continuous", "--input_path", "$inPath", "--output_path", "$outPath", "--model_name", "$model")
+  if ($doCache) { $emuArgs += "--cache" }
+  
+  & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") $emuArgs
 
 }
 catch {
