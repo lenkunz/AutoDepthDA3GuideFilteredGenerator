@@ -208,8 +208,8 @@ class MidasEmulator:
             orig_w, orig_h = img_pil.size
             img_np = np.array(img_pil)
             
-            # Prepare guidance image (normalized)
-            img_tensor = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0).to(self.device).float() / 255.0
+            # Prepare guidance image (normalized) - Stay on CPU for VR stability
+            img_tensor = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0).float() / 255.0
             
             with torch.no_grad():
                 with torch.autocast(device_type=self.device, dtype=torch.float16 if self.device == "cuda" else torch.float32):
@@ -217,8 +217,8 @@ class MidasEmulator:
             
             depth = prediction.depth[0] # This is a numpy array (N, H, W) from the API
             
-            # Convert to tensor for Guided Filter
-            depth_t = torch.from_numpy(depth).unsqueeze(0).unsqueeze(0).to(self.device)
+            # Convert to CPU tensor for Guided Filter refinement
+            depth_t = torch.from_numpy(depth).unsqueeze(0).unsqueeze(0)
             
             # Apply Guided Upscaling to original image resolution
             depth_hr = self.gf(depth_t, img_tensor)

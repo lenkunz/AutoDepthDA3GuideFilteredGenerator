@@ -9,7 +9,7 @@ This service uses **In-Situ Benchmarking** to provide factual data specific to y
     - **Measured Stats**: Reports the **Actual Peak VRAM** and **Average Speed** on your specific GPU.
     - **Skip Option**: You can skip this step to save VRAM and start processing immediate game requests.
 - **VRAM Transparency**: At startup, the service detects your **Current Available VRAM**. This reflects the memory left while your game is already running.
-- **Guided Upscaling**: High-resolution detail is achieved via a **Guided Filter**, which upscales depth using your original image as a spatial map without the VRAM cost of native high-res inference.
+- **Guided Upscaling (CPU-Bound)**: High-resolution detail is achieved via a **Guided Filter**. This operation is strictly offloaded to the **CPU** to preserve GPU performance for VR rendering.
 
 ## Aesthetic Options
 - **Standard**: Linear depth estimation.
