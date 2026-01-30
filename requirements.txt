@@ -1,0 +1,9 @@
+torch>=2.0
+torchvision
+numpy<2.0
+Pillow
+opencv-python
+huggingface_hub
+einops
+timm
+safetensors
