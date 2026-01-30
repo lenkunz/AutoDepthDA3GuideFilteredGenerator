@@ -1,17 +1,21 @@
 # About Global Depth V3 Service
 
-This service enables **Depth Anything V3** (the latest state-of-the-art AI) for your game, providing a massive visual upgrade for your 3D experience.
+This service enables **Depth Anything V3** (the latest state-of-the-art AI) for your 3D experience. 
 
-## Why use Depth Anything V3?
-The original game models often struggle with complex scenes—creating blurry edges or "jelly-like" distortions in 3D. This implementation replaces that engine with V3 technology to achieve:
+## The Difference: V3 Service vs. Native Engine
+What makes this implementation different from the developer’s built-in engine?
 
-- **Ultra-Sharp Details**: Fine edges like hair, foliage, and intricate objects are captured with surgical precision.
-- **Perfect Stability**: Removes the "swimming" or "pulsing" artifacts seen in older models for a solid, immersive 3D feeling.
-- **True Background Depth**: Objects feel correctly placed in 3D space, preventing the "flattened" look in distant landscapes.
+1. **State-of-the-Art Engine (V3)**: The native game uses older depth models that can look "jelly-like" or blurry. This service uses **Depth Anything V3**, which provides surgical precision on fine edges (hair, leaves) and rock-solid stability in 3D space.
+2. **Transparent "Emulator" Design**: Instead of being a closed "black box" inside the game, this is a separate service. It mimics the game's internal language to catch requests and fulfill them with higher quality—no game code patches required.
+3. **Smart "Yanking" Optimization**: Unlike standard AI apps that force 5GB+ downloads, our launcher acts like a detective. it finds and reuses ("yanks") massive AI libraries already installed in your game folders, keeping the setup lightweight and fast.
+4. **Real-Time Feedback**: For the first time, you get a clear dashboard during batch generation. You can see your progress, your current speed, and a precise **ETC (Estimated Time of Completion)** which the native engine doesn't show.
 
-## Zero-Impact Integration
-We built this to be transparent. It sits in the background and acts as a high-fidelity translator for the game. Because it mimics the game's own communication language, you can upgrade your visuals without ever having to patch or modify your core game files.
+## Visual Advantages
+- **Ultra-Sharp Details**: Fine details are captured with high precision.
+- **Perfect Stability**: Removes the "pulsing" artifacts seen in older models.
+- **True Background Depth**: Landscapes have a correct, immersive 3D sense of scale.
 
-## Optimization & Monitoring
-- **Disk Efficiency**: Smartly reuses existing AI libraries from your system to avoid redundant 5GB downloads.
-- **Real-Time Tracking**: Provides a clear dashboard during batch processing with precise time estimation (ETC).
+## Usage
+1. Copy the `midas3` folder into your game root.
+2. Run `Run_Service.bat`.
+3. In-game, set the Depth Model to **Manual**.
