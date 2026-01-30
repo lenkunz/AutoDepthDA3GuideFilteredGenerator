@@ -7,6 +7,9 @@ from PIL import Image
 import time
 import gc
 
+import json
+import urllib.request
+
 # Python version check
 if sys.version_info < (3, 10):
     print("[!] Error: Python 3.10 or higher is required.")
@@ -52,11 +55,46 @@ class MidasEmulator:
         self.model_name = model_name
         self.processing_times = []
         
+        # Load Config
+        self.config = {}
+        self.config_path = os.path.join(BASE_PATH, "config.json")
+        self.load_config()
+
         print(f"[*] Midas DA3 Service Initialization")
         print(f"[*] Device: {self.device}")
         print(f"[*] Memory: Reserving {vram_reserve}GB VRAM.")
         
         self.load_model()
+
+    def load_config(self):
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, 'r') as f:
+                    self.config = json.load(f)
+            except Exception as e:
+                print(f"[!] Error loading config.json: {e}")
+
+    def send_webhook(self, img_path, out_path, duration):
+        webhook_url = self.config.get("webhook_url")
+        if not webhook_url:
+            return
+
+        try:
+            payload = {
+                "event": "depth_generated",
+                "input_image": os.path.abspath(img_path),
+                "output_depth": os.path.abspath(out_path),
+                "model": self.model_name,
+                "resolution": self.resolution,
+                "duration_s": round(duration, 3),
+                "timestamp": time.time()
+            }
+            data = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(webhook_url, data=data, headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                pass 
+        except Exception as e:
+            print(f"[!] Webhook error: {e}")
 
     def load_model(self):
         print(f"[*] Initializing model {self.model_name}... (Will auto-download if missing)")
@@ -162,6 +200,9 @@ class MidasEmulator:
                             start_t = time.time()
                             self.process_image(img_path, out_path, silent=True)
                             end_t = time.time()
+                            
+                            duration = end_t - start_t
+                            self.send_webhook(img_path, out_path, duration)
                             
                             # Update stats
                             duration = end_t - start_t

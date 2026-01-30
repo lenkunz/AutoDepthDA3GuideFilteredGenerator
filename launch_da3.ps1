@@ -7,7 +7,7 @@ Write-Host "`n[*] Midas DA3 Setup and Runner (PowerShell Engine)" -ForegroundCol
 Write-Host "[*] ============================================" -ForegroundColor Cyan
 Write-Host ""
 
-$CONFIG_FILE = Join-Path $PSScriptRoot "launcher_config.json"
+$CONFIG_FILE = Join-Path $PSScriptRoot "config.json"
 
 function Get-OptimizationChoice {
   if (Test-Path $CONFIG_FILE) {
