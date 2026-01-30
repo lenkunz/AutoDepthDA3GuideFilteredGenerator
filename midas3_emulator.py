@@ -247,13 +247,15 @@ class MidasEmulator:
 def show_menu():
     print("""
     ========================================
-     Depth Anything V3 - Model Selection
+      Depth Anything V3 - Model Selection
     ========================================
-    [1] DA3-Giant      (Highest Quality / ~2.5GB)
-    [2] DA3-Mono-Large (Very High / ~1.3GB)
-    [3] DA3-Large      (High Quality/ ~1.3GB)
-    [4] DA3-Base       (Balanced / ~360MB)
-    [5] DA3-Small      (Fast / ~100MB)
+     Note: Sizes refer to pure model weights.
+     
+    [1] DA3-Giant (~2.5 GB) - Best Quality
+    [2] DA3-Mono-Large (~1.3 GB) - Very High
+    [3] DA3-Large (~1.3 GB) - High Quality
+    [4] DA3-Base (~360 MB) - Balanced
+    [5] DA3-Small (~100 MB) - Fast / Low Profile
     ========================================
     """)
     m_choice = input("Select Model [1-5]: ").strip()
@@ -286,6 +288,10 @@ def show_menu():
         "5": 1512
     }
     res = r_mapping.get(r_choice, 1024)
+    
+    print("\n[!] IMPORTANT: Set Game 'Depth Model' to MANUAL now.")
+    print("[!] Otherwise, the game will ignore this service.\n")
+    time.sleep(2)
     
     return model, res
 
@@ -329,6 +335,19 @@ if __name__ == "__main__":
 
     emulator = MidasEmulator(model_name=target_model, resolution=target_res)
     
+    # Final Hardware Check / Warning
+    if emulator.device == "cpu":
+        print("\n" + "!"*40)
+        print(" CRITICAL PERFORMANCE WARNING")
+        print(" Running on CPU - Expect EXTREME slowness.")
+        print(" (30s+ per image, VR will likely lag)")
+        print("!"*40 + "\n")
+    else:
+        try:
+            free, total = torch.cuda.mem_get_info()
+            print(f"[*] Hardware Status: CUDA Ready | VRAM Free: {free/1024**3:.1f} GB")
+        except: pass
+
     if args.continuous:
         emulator.watch_mode(args.input_path, args.output_path)
     else:

@@ -7,7 +7,7 @@ if "%WT_SESSION%"=="" (
     where wt >nul 2>nul
     if %ERRORLEVEL% equ 0 (
         echo [*] Optimizing UI in Windows Terminal...
-        wt -d "%~dp0" cmd /c "%~f0"
+        wt -d . cmd /c "%~f0"
         exit /b
     )
 )

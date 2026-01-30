@@ -9,6 +9,46 @@ Write-Host ""
 
 $CONFIG_FILE = Join-Path $PSScriptRoot "config.json"
 
+function Clean-Processes {
+  Write-Host "[*] Cleaning up existing AI processes..." -ForegroundColor Gray
+  $procs = Get-Process "python" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*midas3_emulator.py*" }
+  foreach ($p in $procs) {
+    try { Stop-Process $p.Id -Force -ErrorAction SilentlyContinue } catch {}
+  }
+}
+
+function Get-HardwareStatus {
+  $vram = "Unknown"
+  $cuda = "Not Found"
+  
+  # Try to get VRAM via NVIDIA-SMI if available
+  try {
+    $nvsmi = & "nvidia-smi" --query-gpu=memory.free --format=csv, noheader, nounits 2>$null
+    if ($LASTEXITCODE -eq 0) {
+      $vram = "$([math]::Round($nvsmi / 1024, 1)) GB Free"
+      $cuda = "Available (NVIDIA)"
+    }
+  }
+  catch {}
+
+  return @{ vram = $vram; cuda = $cuda }
+}
+
+function Select-Model {
+  Write-Host "`n[?] MODEL SELECTION" -ForegroundColor Yellow
+  Write-Host "-------------------------------------------"
+  Write-Host "[1] DA3-Giant (~2.5GB model) - BEST Quality (Needs >8GB VRAM)"
+  Write-Host "[2] DA3-Large (~0.8GB model) - Good Quality (Needs <6GB VRAM)"
+  Write-Host "Note: Sizes refer to model weight only, environment is shared."
+  
+  $choice = ""
+  while ($choice -notmatch "^[12]$") {
+    $choice = (Read-Host "Select [1-2]").Trim()
+  }
+  
+  return if ($choice -eq "1") { "da3-giant" } else { "da3-large" }
+}
+
 function Get-OptimizationChoice {
   if (Test-Path $CONFIG_FILE) {
     $cfg = Get-Content $CONFIG_FILE | ConvertFrom-Json
@@ -79,8 +119,23 @@ function Save-PythonPath ($path) {
 }
 
 try {
+  # 0. Hardware & Cleanup
+  Clean-Processes
+  $hw = Get-HardwareStatus
+  
+  Write-Host "[*] HARDWARE ANALYSIS" -ForegroundColor Cyan
+  Write-Host "  > VRAM: $($hw.vram)"
+  Write-Host "  > CUDA: $($hw.cuda)"
+  
+  if ($hw.cuda -eq "Not Found") {
+    Write-Host "`n[!] WARNING: NO CUDA DETECTED" -ForegroundColor Red
+    Write-Host "[!] This service will run on CPU, which is EXTREMELY slow." -ForegroundColor Red
+    Write-Host "[!] Depth will take 30s+ per image. NVIDIA GPU recommended.`n" -ForegroundColor Red
+  }
+
   # 1. Start setup
   $opt = Get-OptimizationChoice
+  $model = Select-Model
   $basePython = Get-PythonPath
 
   while ($null -eq $basePython) {
@@ -101,10 +156,26 @@ try {
 
   # 2. Check for capacity (Venv & Yanking)
   Write-Host "[*] Verifying environment compatibility..."
-  $null = & $basePython -c "import venv; print('OK')" 2>$null
-  $hasVenvMod = ($LASTEXITCODE -eq 0)
-  $null = & $basePython -c "import torch; print('OK')" 2>$null
-  $hasTorch = ($LASTEXITCODE -eq 0)
+  $hasVenvMod = $false
+  $hasTorch = $false
+  
+  try {
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    
+    # Check venv
+    & $basePython -c "import venv; print('OK')" 2>$null
+    $hasVenvMod = ($LASTEXITCODE -eq 0)
+    
+    # Check torch
+    & $basePython -c "import torch; print('OK')" 2>$null
+    $hasTorch = ($LASTEXITCODE -eq 0)
+    
+    $ErrorActionPreference = $oldEAP
+  }
+  catch {
+    # Ignore errors during compatibility check, we just need $hasVenvMod/$hasTorch
+  }
 
   $venvPath = Join-Path $PSScriptRoot "env"
   $pythonExe = Join-Path $venvPath "Scripts\python.exe"
@@ -150,8 +221,9 @@ try {
 
   # 6. Run
   Write-Host "`n[+] Environment ready. Starting DA3 Service..." -ForegroundColor Green
+  Write-Host "[!] IMPORTANT: Ensure game 'Depth Model' is set to MANUAL now.`n" -ForegroundColor Yellow
   Write-Host "[*] Monitoring '$inPath' for requests...`n" -ForegroundColor Gray
-  & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") --continuous --input_path "$inPath" --output_path "$outPath"
+  & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") --continuous --input_path "$inPath" --output_path "$outPath" --model_name "$model"
 
 }
 catch {
