@@ -1,19 +1,16 @@
-# AutoDepth Standalone DA3 Service
-# ==================================
+# AutoDepth DA3 Standalone Service
 
-This bundle provides a standalone Depth Anything V3 service for AutoDepth.
+This service acts as a transparent "emulator" for the native depth engine. It allows you to use **Depth Anything V3** without modifying any game code.
 
-## Installation
-1. Copy the `midas3` directory to your game root.
-2. Run `Setup_and_Run_DA3.bat`.
-   - Choose **Aggressive Yanking** to reuse game libraries (fastest).
-   - Choose **Fresh Environment** if you want a clean, isolated setup.
+## Purpose
+The goal is to provide a zero-patch integration by mimicking the game's file-based communication protocol. It monitors for requests and generates depth maps that any compatible mod can read instantly.
 
-## Technical Details
-- **TUI Menu**: Interactive selection of models and resolutions.
-- **Yank Engine**: Reuses the game's massive dependencies to save ~5GB of space.
-- **Direct Run**: Automatically works on "stripped" game-bundled Python distributions.
+## Quick Start
+1. Copy this `midas3` folder into your game root.
+2. Run `Run_Service.bat` and follow the on-screen setup prompts.
+3. In-game, set the Depth Model to **Manual**.
 
-## Developer Notes
-- Monitor the `input/` folder for requests.
-- Depth maps are generated as `.pfm` files in `output/`.
+## Logic
+- **Input**: Watches `input/` for text requests from the game.
+- **Output**: Writes V3 depth maps as `.pfm` files to `output/`.
+- **Optimization**: Reuses existing game libraries (Yanking) to save disk space.
