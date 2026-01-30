@@ -1,19 +1,16 @@
-# DA3 Service Optimizer
+# Depth Anything V3 Standalone Service
 
-This service provides an optimized, standalone environment for managing and running your **Depth Anything V3** requests.
+This bundle provides a standalone environment for managing and running **Depth Anything V3** requests for your image viewing experience.
 
-## What makes this different?
-While you may already be using Depth Anything, this specific implementation is designed to streamline your workflow and save resources:
+## Functional Additions
+This implementation focuses on providing more control and visibility over your depth generation workflow:
 
-- **Dedicated Workflow Dashboard**: Unlike the native background process, this provides a clear interactive dashboard for batch processing. You get real-time feedback on progress, generation speed, and a precise **ETC** (Estimated Time of Completion).
-- **Resource Efficiency**: It intelligently shares system libraries to avoid redundant 5GB+ downloads, keeping your installation lean and fast.
-- **Isolated Stability**: By running as a standalone service, it ensures that your depth generation remains stable and doesn't conflict with other game processes.
-- **Interactive Control**: Choose between different model sizes and resolutions on-the-fly to match your hardware's VRAM capacity.
+- **Interactive Dashboard**: Provides a real-time TUI (Terminal User Interface) that shows batch processing status, generation speed, and a precise **ETC** (Estimated Time of Completion).
+- **Flexible Configuration**: Allows you to choose between different model variants (Small to Giant) and resolutions on-the-fly to suit your hardware.
+- **Dependency Sharing**: Uses a "Yanking" logic to reuse core AI libraries already found on your system, reducing the need for redundant multi-gigabyte downloads.
+- **Standalone Execution**: Runs as a separate process in the background, allowing for easier monitoring and troubleshooting without modifying core game files.
 
-## Integration
-This tool acts as a transparent bridge. It catches requests and fulfills them using an optimized DA3 engine, allowing for a "zero-patch" experience where you can upgrade or swap models without modifying core game files.
-
-## Quick Start
+## Usage
 1. Copy the `midas3` folder into your game root.
-2. Run `Run_Service.bat`.
+2. Run `Run_Service.bat` and follow the setup prompts.
 3. In-game, set the Depth Model to **Manual**.

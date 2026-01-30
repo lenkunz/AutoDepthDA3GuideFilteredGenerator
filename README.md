@@ -1,8 +1,8 @@
-# DA3 Service Optimizer
+# Depth Anything V3 Standalone Service
 
-An optimized, standalone environment for Depth Anything V3 with real-time progress tracking and resource management.
+A standalone environment for Depth Anything V3 featuring an interactive dashboard and integrated resource management.
 
-For details on the workflow advantages and optimization, see [ABOUTTHIS.md](ABOUTTHIS.md).
+For details on the features and usage, see [ABOUTTHIS.md](ABOUTTHIS.md).
 
 ## Usage
 1. Copy the `midas3` folder into your game root.
