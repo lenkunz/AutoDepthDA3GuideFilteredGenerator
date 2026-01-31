@@ -281,40 +281,53 @@ class MidasEmulator:
             # and flip it within its own range.
             d_min_f, d_max_f = depth_final.min(), depth_final.max()
             
-            # --- FINAL PROCESSING: FLIP & BOOST ---
-            # Standardized: Python creates "Game Ready" data (0.0 = Near)
-            # Use linear flip to preserve "Knee" details (1/d was too aggressive).
+            # --- FINAL PROCESSING: FLIP & NORMALIZATION ---
+            # Standardized: Python creates "Game Ready" data (0.0 = Near) 
+            # We normalize to 0-1 for consistent thickness in the image viewer.
             d_min_f, d_max_f = depth_final.min(), depth_final.max()
+            d_range_f = d_max_f - d_min_f + 1e-8
+            depth_final = (depth_final - d_min_f) / d_range_f
             
-            # Flip: 1.0 (Near/Disparity) -> 0.0 (Metric Near)
-            # Default inversion (disparity to metric-like)
+            # Since AI output is Disparity (1.0 = Near), we flip to Metric-like (0.0 = Near)
             if hasattr(self, 'invert') and self.invert:
-                # Linear flip within its own range preserves all foreground detail
-                # near remains 0, far remains max
-                depth_final = d_max_f - depth_final 
+                depth_final = 1.0 - depth_final 
             
-            # Applying a power curve (Gamma) can make depth look "deeper"
-            # This helps with Sky issues without flattening the foreground as much as 1/d.
+            # --- VANILLA COMPATIBILITY (SCALE COUNTER) ---
+            # The original game divides depth by the model's MaxDepth.
+            # Applying a power curve (Gamma) for pop
             if hasattr(self, 'boost') and self.boost != 1.0:
-                db_min, db_max = depth_final.min(), depth_final.max()
-                db_range = db_max - db_min + 1e-8
-                depth_final = np.power((depth_final - db_min) / db_range, self.boost) * db_range + db_min
+                depth_final = np.power(depth_final, self.boost)
 
-            save_pfm(out_path, depth_final)
-            if not silent: print(f"    - Done: {os.path.basename(out_path)} (Range: {d_min_f:.2f}-{d_max_f:.2f})")
-            
             # --- LOCAL CACHE (Save next to original image) ---
+            # Standard: Local cache is ALWAYS 0-1 normalized for portability.
             if hasattr(self, 'cache_local') and self.cache_local:
                 try:
-                    # Suffix for AutoDepthMod: [image].[res].f16.depth
-                    # We use height as the resolution indicator
                     cache_name = f"{os.path.basename(real_img_path)}.{self.resolution}.f16.depth"
                     cache_path = os.path.join(os.path.dirname(real_img_path), cache_name)
-                    
-                    # Convert to float16 and save raw binary
                     depth_final.astype(np.float16).tofile(cache_path)
                 except Exception as cache_err:
                     pass
+
+            # --- VANILLA COMPATIBILITY (SCALE COUNTER) ---
+            # The original game divides depth by the model's MaxDepth.
+            # We put the "Vanilla Scale" into the PFM header so the pixels stay 0-1
+            # (High precision) but the game sees the intended thickness.
+            compatibility_map = {
+                "da3-giant": 6.0,
+                "v2-large": 240.0,
+                "v2-base": 24.0,
+                "v2-small": 12.0,
+                "da2-giant": 600.0
+            }
+            v_scale = compatibility_map.get(self.model_name.lower(), 1.0)
+            
+            # Use negative sign for Little-Endian (Standard PFM)
+            pfm_header_scale = -v_scale if (hasattr(self, 'vanilla_compat') and self.vanilla_compat) else -1.0
+
+            save_pfm(out_path, depth_final, scale=pfm_header_scale)
+            if not silent: 
+                v_msg = f" (Vanilla Header x{v_scale})" if (pfm_header_scale != -1.0) else " (Normalized 0-1)"
+                print(f"    - Done: {os.path.basename(out_path)}{v_msg}")
 
             # Post-flight cleanup
             del prediction; del depth; del depth_final; del img_np
@@ -422,12 +435,13 @@ def load_emu_config():
                 # Migration: set defaults for new fields if missing
                 if "boost" not in data: data["boost"] = 1.0
                 if "cache" not in data: data["cache"] = False
-                if "invert" not in data: data["invert"] = False
+                if "invert" not in data: data["invert"] = True
+                if "vanilla_compat" not in data: data["vanilla_compat"] = False
                 return data
         except: return None
     return None
 
-def save_emu_config(model, res, bench, boost, cache, invert):
+def save_emu_config(model, res, bench, boost, cache, invert, vanilla_compat):
     config_path = os.path.join(BASE_PATH, "emu_config.json")
     try:
         with open(config_path, 'w') as f:
@@ -437,7 +451,8 @@ def save_emu_config(model, res, bench, boost, cache, invert):
                 "bench": bench,
                 "boost": boost,
                 "cache": cache,
-                "invert": invert
+                "invert": invert,
+                "vanilla_compat": vanilla_compat
             }, f)
     except: pass
 
@@ -448,7 +463,7 @@ def show_menu():
     print("   ----------------------------------")
     
     if last_cfg:
-        print(f"   [0] Resume Last: {last_cfg['model']} @ {last_cfg['res']}px (Boost: {last_cfg['boost']}, Cache: {'Y' if last_cfg['cache'] else 'N'}, Invert: {'Y' if last_cfg.get('invert', False) else 'N'})")
+        print(f"   [0] Resume Last: {last_cfg['model']} @ {last_cfg['res']}px (Boost: {last_cfg['boost']}, Cache: {'Y' if last_cfg['cache'] else 'N'}, Standard Flip: {'Y' if last_cfg.get('invert', True) else 'N'}, Vanilla Compat: {'Y' if last_cfg.get('vanilla_compat', False) else 'N'})")
     
     print("   -- Depth Anything V3 (Newest) --")
     print("   [1] DA3-Giant  (4.5GB-8.5GB VRAM)")
@@ -466,12 +481,14 @@ def show_menu():
     m_choice = input("   Select [0-9]: ").strip()
     
     if m_choice == "0" and last_cfg:
-        return last_cfg['model'], last_cfg['res'], last_cfg['bench'], last_cfg['boost'], last_cfg['cache'], last_cfg.get('invert', False)
+        return (last_cfg['model'], last_cfg['res'], last_cfg['bench'], 
+                last_cfg['boost'], last_cfg['cache'], last_cfg.get('invert', True), 
+                last_cfg.get('vanilla_compat', False))
         
     m_mapping = {
         "1": "da3-giant", "2": "da3-large", "3": "da3metric-large",
         "4": "da3-base", "5": "da3-small",
-        "6": "v2-giant", "7": "v2-large", "8": "v2-base", "9": "v2-small"
+        "6": "da2-giant", "7": "v2-large", "8": "v2-base", "9": "v2-small"
     }
     model = m_mapping.get(m_choice, "da3-giant")
 
@@ -501,13 +518,18 @@ def show_menu():
     
     print("\n   [ Inversion ]")
     print("   -------------")
-    i_input = input("   Invert Depth (Near=0)? [y/N]: ").strip().lower()
-    invert = True if i_input == 'y' else False
+    i_input = input("   Invert Depth (Near=0)? [Y/n]: ").strip().lower()
+    invert = False if i_input == 'n' else True
+
+    print("\n   [ Compatibility ]")
+    print("   -----------------")
+    val_choice = input("   Enable Vanilla Mode (Fixes Flatness/No-Mod)? [y/N]: ").strip().lower()
+    vanilla_compat = True if val_choice == 'y' else False
     
     do_bench = input("\n   Run Benchmark? [y/N]: ").strip().lower() == 'y'
     
-    save_emu_config(model, res, do_bench, boost, cache, invert)
-    return model, res, do_bench, boost, cache, invert
+    save_emu_config(model, res, do_bench, boost, cache, invert, vanilla_compat)
+    return model, res, do_bench, boost, cache, invert, vanilla_compat
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Midas DA3 Service")
@@ -535,35 +557,35 @@ if __name__ == "__main__":
     target_model = args.model_type
     target_res = args.height
     target_bench = args.benchmark
+    target_vanilla = False # default
 
     if not target_model:
-        t_model, t_res, t_bench, t_boost, t_cache, t_invert = show_menu()
+        t_model, t_res, t_bench, t_boost, t_cache, t_invert, t_vanilla = show_menu()
         target_model = t_model
         target_res = t_res
         target_bench = t_bench
         target_boost = t_boost
         target_cache = t_cache
         target_invert = t_invert
+        target_vanilla = t_vanilla
         print(f"[*] Config: {target_model} @ {target_res}px")
         time.sleep(0.5)
     else:
-        # If model is passed via CLI (e.g. by Game), check if we have a config for aesthetic preferences
         last_cfg = load_emu_config()
-        # Defaults if not in config
         target_boost = args.boost
         target_cache = args.cache
-        target_invert = False
+        target_invert = True
         
         if last_cfg:
             target_boost = last_cfg.get("boost", target_boost)
             target_cache = last_cfg.get("cache", target_cache)
             target_invert = last_cfg.get("invert", target_invert)
-        
-        # CLI flag overrides
-        if args.invert: target_invert = True
-        if args.no_invert: target_invert = False
-        if args.cache: target_cache = True
-        # Note: boost is already captured by args.boost default
+            target_vanilla = last_cfg.get("vanilla_compat", target_vanilla)
+
+    # CLI flag overrides
+    if args.invert: target_invert = True
+    if args.no_invert: target_invert = False
+    if args.cache: target_cache = True
 
     # Technical Mapping for Game Requests
     technical_mapping = {
@@ -579,8 +601,9 @@ if __name__ == "__main__":
         target_model = technical_mapping[target_model]
 
     emulator = MidasEmulator(model_name=target_model, resolution=target_res, boost=target_boost, run_bench=target_bench)
-    emulator.cache_local = target_cache # Set local cache preference
+    emulator.cache_local = target_cache
     emulator.invert = target_invert
+    emulator.vanilla_compat = target_vanilla
     
     # Final Hardware Check / Warning
     if emulator.device == "cpu":
