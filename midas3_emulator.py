@@ -494,7 +494,7 @@ def show_menu():
 
     print("\n   [ Inference Resolution ]")
     print("   ------------------------")
-    print("   [1] 518  (~1.5GB Extra VRAM)")
+    print("   [1] 512  (~1.5GB Extra VRAM)")
     print("   [2] 768  (~3.0GB Extra VRAM)")
     print("   [3] 1024 (~5.0GB Extra VRAM)")
     print("   [4] 1280 (~7.5GB Extra VRAM)")
@@ -502,7 +502,7 @@ def show_menu():
     print("   ------------------------")
     
     r_choice = input("   Select [1-5]: ").strip()
-    r_mapping = {"1": 518, "2": 768, "3": 1024, "4": 1280, "5": 1512}
+    r_mapping = {"1": 512, "2": 768, "3": 1024, "4": 1280, "5": 1512}
     res = r_mapping.get(r_choice, 1024)
     
     print("\n   [ Depth Contrast (Boost) ]")
