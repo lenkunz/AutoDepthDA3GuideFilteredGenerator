@@ -287,24 +287,31 @@ class MidasEmulator:
             filter_r = max(2, int(orig_w / 64)) 
             depth_final = guided_filter_refinement(guide, depth_high, r=filter_r, eps=1e-4)
 
-            # --- FINAL PROCESSING: NORMALIZATION & BOOST & FLIP ---
-            # Standardized: Python creates "Game Ready" data 
-            # AI output is Disparity (1.0 = Near).
+            # --- FINAL PROCESSING: LINEARIZATION & NORMALIZATION & BOOST ---
+            # AI models output Disparity (1/distance). 
+            # We convert to Linear Distance to fix the "Crushed Near" issue.
+            is_metric = "metric" in self.model_name.lower()
             
-            # 1. Normalize Disparity to 0-1
+            if not is_metric:
+                # 1. Convert Disparity -> Linear Distance
+                # Using 0.05 epsilon prevents background "explosions" while keeping near-field depth.
+                depth_final = 1.0 / (depth_final + 0.05)
+            
+            # 2. Normalize to 0-1 (0.0 = Near)
             d_min_f, d_max_f = depth_final.min(), depth_final.max()
             d_range_f = d_max_f - d_min_f + 1e-8
             depth_final = (depth_final - d_min_f) / d_range_f
             
-            # 2. Apply Power Curve (Boost) to DISPARITY
-            # Applying power > 1 to disparity (Near=1.0) expands the foreground 
-            # and compresses the background. This fixes the "crushed near" issue.
+            # 3. Apply Power Curve (Boost) to Linear Distance
+            # Applying power > 1 to distance (Near=0.0) expands the near-field resolution 
+            # and compresses the background, creating the "pop" effect without crushing detail.
             if hasattr(self, 'boost') and self.boost != 1.0:
                 depth_final = np.power(depth_final, self.boost)
 
-            # 3. Flip to Metric-like (0.0 = Near)
-            # Since AI output is Disparity (1.0 = Near), we flip to Metric-like (0.0 = Near)
-            if hasattr(self, 'invert') and self.invert:
+            # 4. Respect User Inversion Preference
+            # Linear Distance naturally results in 0.0 = Near (Standard Inversion).
+            # If the user explicitly sets invert=False, we flip it back to 1.0 = Near.
+            if hasattr(self, 'invert') and not self.invert:
                 depth_final = 1.0 - depth_final 
 
             # --- LOCAL CACHE (Save next to original image) ---
