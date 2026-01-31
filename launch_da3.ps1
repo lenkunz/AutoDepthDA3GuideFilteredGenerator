@@ -35,51 +35,6 @@ function Get-HardwareStatus {
   return @{ vram = $vram; cuda = $cuda }
 }
 
-function Select-Model {
-  Write-Host "`n[?] MODEL SELECTION" -ForegroundColor Yellow
-  Write-Host "--------------------------------------------------------"
-  Write-Host "[1] DA3-Giant (~2.5 GB)     | VRAM: ~4.5GB (512px) | ~8.5GB (1024px)"
-  Write-Host "[2] DA3-Large (~0.8 GB)     | VRAM: ~1.8GB (512px) | ~3.5GB (1024px)"
-  Write-Host "[3] DA3-Metric (~0.8 GB)    | Metric-Scale (Good for Scale)"
-  Write-Host "[4] DA3-Medium/Base (~250 MB) | Balanced"
-  Write-Host "[5] DA3-Small (~100 MB)       | Ultra Fast / VR"
-  Write-Host "Note: Estimates represent total app VRAM usage."
-  
-  $choice = ""
-  while ($choice -notmatch "^[1-5]$") {
-    $choice = (Read-Host "Select [1-5]").Trim()
-  }
-  
-  $mapping = @{
-    "1" = "da3-giant"
-    "2" = "da3-large"
-    "3" = "da3metric-large"
-    "4" = "da3-base"
-    "5" = "da3-small"
-  }
-  
-  return $mapping[$choice]
-}
-
-function Get-CacheChoice {
-  Write-Host "`n[?] SAVE DEPTH LOCALLY?" -ForegroundColor Yellow
-  Write-Host "--------------------------------------------------------"
-  Write-Host "(This allows the mod to 'remember' depth for faster loading)"
-  $choice = Read-Host "[y/N]"
-  return ($choice -eq "y")
-}
-
-function Get-BoostChoice {
-  Write-Host "`n[?] DEPTH CONTRAST (BOOST)" -ForegroundColor Yellow
-  Write-Host "--------------------------------------------------------"
-  Write-Host "DA3 is mathematically accurate, but some find it 'flat'."
-  Write-Host "[1] Standard (Factual Accuracy)"
-  Write-Host "[2] Boosted  (More 'Pop' / Like DA2)"
-  
-  $choice = (Read-Host "Select [1-2]").Trim()
-  if ($choice -eq "2") { return 1.25 } else { return 1.0 }
-}
-
 function Get-OptimizationChoice {
   if (Test-Path $CONFIG_FILE) {
     $cfg = Get-Content $CONFIG_FILE | ConvertFrom-Json
@@ -87,15 +42,39 @@ function Get-OptimizationChoice {
   }
 
   Write-Host "[?] Optimization Selection (Recommended for First Run)" -ForegroundColor Yellow
-  Write-Host "Aggressive reuse the game's massive AI libraries (torch) to save 5GB+ disk space."
-    
+  Write-Host "Aggressive reuse the game's massive AI libraries (torch) to prevent 5GB+ disk usage."
+  
   $opt = "yank"
-    
+  
   # Save choice
   $cfg = @{ optimization = $opt }
   $cfg | ConvertTo-Json | Set-Content $CONFIG_FILE
-    
   return $opt
+}
+
+function Get-GamePath {
+  # 1. Check if we are already inside the game folder (e.g. running from common/AutoDepth...)
+  if ($PSScriptRoot -like "*common\AutoDepth Image Viewer*") {
+    return (Split-Path $PSScriptRoot -Parent)
+  }
+
+  # 2. Check Steam Registry/Library
+  try {
+    $steamPath = (Get-ItemProperty -Path "HKCU:\SOFTWARE\Valve\Steam" -ErrorAction SilentlyContinue).SteamPath
+    if ($steamPath -and (Test-Path "$steamPath\steamapps\libraryfolders.vdf")) {
+      $vdf = Get-Content "$steamPath\steamapps\libraryfolders.vdf" -Raw
+      $allMatches = [regex]::Matches($vdf, '"path"\s+"([^"]+)"')
+      foreach ($m in $allMatches) {
+        $libPath = $m.Groups[1].Value.Replace("\\", "\")
+        $p = Join-Path $libPath "steamapps\common\AutoDepth Image Viewer"
+        if (Test-Path $p) { return $p }
+      }
+    }
+  }
+  catch {}
+
+  # 3. Last resort: Fallback to local script root
+  return $PSScriptRoot
 }
 
 function Get-PythonPath {
@@ -105,24 +84,12 @@ function Get-PythonPath {
     return $cfg.python_path
   }
 
+  $gamePath = Get-GamePath
   Write-Host "[*] Searching for DA3-compatible Python..." -ForegroundColor Gray
   $candidates = @()
-  # local/parent
   $candidates += Join-Path $PSScriptRoot "Depth-Anything-3\Python310\python.exe"
-  $candidates += Join-Path (Split-Path $PSScriptRoot -Parent) "Depth-Anything-3\Python310\python.exe"
-  # steam
-  try {
-    $steamPath = (Get-ItemProperty -Path "HKCU:\SOFTWARE\Valve\Steam" -ErrorAction SilentlyContinue).SteamPath
-    if ($steamPath -and (Test-Path "$steamPath\steamapps\libraryfolders.vdf")) {
-      $vdf = Get-Content "$steamPath\steamapps\libraryfolders.vdf" -Raw
-      $allMatches = [regex]::Matches($vdf, '"path"\s+"([^"]+)"')
-      foreach ($m in $allMatches) {
-        $libPath = $m.Groups[1].Value
-        $candidates += Join-Path $libPath "steamapps\common\AutoDepth Image Viewer\midas3\Depth-Anything-3\Python310\python.exe"
-      }
-    }
-  }
-  catch {}
+  $candidates += Join-Path $gamePath "midas3\Depth-Anything-3\Python310\python.exe"
+  $candidates += Join-Path $gamePath "Depth-Anything-3\Python310\python.exe"
   # system
   $candidates += "python"
 
@@ -178,9 +145,6 @@ try {
 
     # 1. Start setup
     $opt = Get-OptimizationChoice
-    $model = Select-Model
-    $doCache = Get-CacheChoice
-    $boost = Get-BoostChoice
     $basePython = Get-PythonPath
 
     while ($null -eq $basePython) {
@@ -253,14 +217,21 @@ try {
       $pythonExe = Join-Path $venvPath "Scripts\python.exe"
     }
 
-    # 4. Directories (Service-local)
-    Write-Host "[*] Ensuring communication directories exist..."
-    $inPath = Join-Path $PSScriptRoot "input"
-    $outPath = Join-Path $PSScriptRoot "output"
+    # 4. Directories (Game-Resident for Handshake)
+    Write-Host "[*] Resolving game communication directories..."
+    $gamePath = Get-GamePath
+    $inPath = Join-Path $gamePath "Midas3\input"
+    $outPath = Join-Path $gamePath "Midas3\output"
 
-    foreach ($dir in @("input", "output")) {
-      $path = Join-Path $PSScriptRoot $dir
-      if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path | Out-Null }
+    # If game path doesn't have Midas3, fallback to local so the service still runs
+    if (-not (Test-Path $inPath)) {
+      Write-Host "[!] Game Midas3 folder not found. Using local service directories." -ForegroundColor Gray
+      $inPath = Join-Path $PSScriptRoot "input"
+      $outPath = Join-Path $PSScriptRoot "output"
+    }
+
+    foreach ($p in @($inPath, $outPath)) {
+      if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p | Out-Null }
     }
 
     # 5. Dependency Check & Top-off
@@ -272,12 +243,11 @@ try {
     }
 
     # 6. Run
-    Write-Host "`n[+] Environment ready. Starting DA3 Service..." -ForegroundColor Green
+    Write-Host "`n[+] Environment ready. Starting Midas Service..." -ForegroundColor Green
     Write-Host "[!] Note: Ensure Game 'Depth Model' is set to MANUAL for this session.`n" -ForegroundColor Yellow
     Write-Host "[*] Monitoring '$inPath' for requests...`n" -ForegroundColor Gray
   
-    $emuArgs = @("--continuous", "--input_path", "$inPath", "--output_path", "$outPath", "--model_name", "$model", "--boost", "$boost")
-    if ($doCache) { $emuArgs += "--cache" }
+    $emuArgs = @("--continuous", "--input_path", "$inPath", "--output_path", "$outPath")
   
     # Run and capture exit code
     & $pythonExe (Join-Path $PSScriptRoot "midas3_emulator.py") $emuArgs
