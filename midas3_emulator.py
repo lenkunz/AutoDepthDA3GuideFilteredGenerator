@@ -281,30 +281,31 @@ class MidasEmulator:
             # CPU Guided Filter Refinement
             guide = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
             depth_high = cv2.resize(depth_inf, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
-            depth_final = guided_filter_refinement(guide, depth_high, r=8, eps=1e-3)
             
-            # --- FINAL PROCESSING: FLIP & BOOST ---
-            # Standardized: Python creates "Game Ready" data (0.0 = Near)
-            # We use the raw depth_final (which has AI's relative scale)
-            # and flip it within its own range.
-            d_min_f, d_max_f = depth_final.min(), depth_final.max()
+            # ADAPTIVE EDGE SMOOTHING: Radius scales with image width
+            # eps 1e-4 allows better edge alignment while r=max(2, w/64) provides smoother gradients.
+            filter_r = max(2, int(orig_w / 64)) 
+            depth_final = guided_filter_refinement(guide, depth_high, r=filter_r, eps=1e-4)
+
+            # --- FINAL PROCESSING: NORMALIZATION & BOOST & FLIP ---
+            # Standardized: Python creates "Game Ready" data 
+            # AI output is Disparity (1.0 = Near).
             
-            # --- FINAL PROCESSING: FLIP & NORMALIZATION ---
-            # Standardized: Python creates "Game Ready" data (0.0 = Near) 
-            # We normalize to 0-1 for consistent thickness in the image viewer.
+            # 1. Normalize Disparity to 0-1
             d_min_f, d_max_f = depth_final.min(), depth_final.max()
             d_range_f = d_max_f - d_min_f + 1e-8
             depth_final = (depth_final - d_min_f) / d_range_f
             
+            # 2. Apply Power Curve (Boost) to DISPARITY
+            # Applying power > 1 to disparity (Near=1.0) expands the foreground 
+            # and compresses the background. This fixes the "crushed near" issue.
+            if hasattr(self, 'boost') and self.boost != 1.0:
+                depth_final = np.power(depth_final, self.boost)
+
+            # 3. Flip to Metric-like (0.0 = Near)
             # Since AI output is Disparity (1.0 = Near), we flip to Metric-like (0.0 = Near)
             if hasattr(self, 'invert') and self.invert:
                 depth_final = 1.0 - depth_final 
-            
-            # --- VANILLA COMPATIBILITY (SCALE COUNTER) ---
-            # The original game divides depth by the model's MaxDepth.
-            # Applying a power curve (Gamma) for pop
-            if hasattr(self, 'boost') and self.boost != 1.0:
-                depth_final = np.power(depth_final, self.boost)
 
             # --- LOCAL CACHE (Save next to original image) ---
             # Standard: Local cache is ALWAYS 0-1 normalized for portability.
