@@ -30,6 +30,14 @@ DA3_ROOT = os.path.join(BASE_PATH, "Depth-Anything-3", "Depth-Anything")
 if not os.path.exists(DA3_ROOT):
     DA3_ROOT = os.path.join(BASE_PATH, "..", "Depth-Anything-3", "Depth-Anything")
 
+# --- WEIGHTS REDIRECTION ---
+# Ensure models are saved to the Game's Midas3/weights folder
+# instead of the user's hidden AppData folder.
+WEIGHTS_PATH = os.path.join(BASE_PATH, "weights")
+os.makedirs(WEIGHTS_PATH, exist_ok=True)
+os.environ["HF_HOME"] = WEIGHTS_PATH
+os.environ["HUGGINGFACE_HUB_CACHE"] = WEIGHTS_PATH
+
 sys.path.append(os.path.join(DA3_ROOT, "src"))
 
 try:
